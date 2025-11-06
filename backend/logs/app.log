@@ -2946,3 +2946,88 @@ WHERE (
 2025-11-06 11:39:25,865 - app.routers.trazabilidad_router - INFO - [Task b3bd28ed-e071-4146-8377-5d54645f55c6] Sesión de DB de tarea cerrada.
 2025-11-06 11:39:55,568 - app.routers.trazabilidad_router - INFO - [Task d271f90a-0c90-4cb1-b4bf-ee9ad789e519] Tarea cancelada. Descartando resultados.
 2025-11-06 11:39:55,570 - app.routers.trazabilidad_router - INFO - [Task d271f90a-0c90-4cb1-b4bf-ee9ad789e519] Sesión de DB de tarea cerrada.
+2025-11-06 11:49:58,305 - root - INFO - Sistema de logging configurado correctamente.
+2025-11-06 11:50:12,925 - app.db_operations - INFO - Se encontraron 4 estrategias activas para '0020ACSA'.
+2025-11-06 11:50:13,015 - app.db_operations - INFO - Aplicando orden por defecto (columna 1)
+2025-11-06 11:50:13,016 - app.db_operations - INFO - Ejecutando consulta (paginada) con params: {}
+2025-11-06 11:50:16,184 - app.db_operations - INFO - Cargando datos de la estrategia ID: 35
+2025-11-06 11:50:16,420 - app.db_operations - INFO - Aplicando orden: DEUDA 1
+2025-11-06 11:50:16,421 - app.db_operations - INFO - Ejecutando consulta (paginada) con params: {'desde_param_deuda': '100000', 'hasta_param_deuda': '200000'}
+2025-11-06 11:50:16,716 - app.db_operations - INFO - Aplicando orden: DEUDA 1
+2025-11-06 11:50:16,716 - app.db_operations - INFO - Ejecutando consulta (paginada) con params: {'desde_param_deuda': '100000', 'hasta_param_deuda': '200000'}
+2025-11-06 11:50:45,420 - app.routers.trazabilidad_router - INFO - Tarea 02b63a80-b679-445e-a88c-e58b241b25ea iniciada por aascanio@netpag.cl.
+2025-11-06 11:50:45,422 - app.routers.trazabilidad_router - INFO - [Task 02b63a80-b679-445e-a88c-e58b241b25ea] Iniciando consulta TRAF para aascanio@netpag.cl...
+2025-11-06 11:50:45,645 - app.db_traf_operations - INFO - Ejecutando consulta en la vista TRAF: SELECT "PERIODO", "SEMANA", "CLIENTE", "CAMPANA", "RUT", "USUARIO", "TELEFONO", "FECHA", "HORA", "RESP_TELEFONIA", "CATEGORIA", "SUBCATEGORIA", "SUBCATEGORIA1", "TIPO_DISCADOR", "DURACION", "GRABACION", "FECHAHORA", "TIPIFICACION", "VALOR_UNITARIO", "VALOR_MINUTAJE", "RUTDV", "OrigenTabla" 
+FROM dbo."vw_TrafDiscador" 
+WHERE (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) >= :desde_param_fecha AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) <= :hasta_param_fecha ORDER BY dbo."vw_TrafDiscador"."PERIODO" con parámetros: {'desde_param_fecha': '2025-11-04', 'hasta_param_fecha': '2025-11-04'}
+2025-11-06 11:50:49,682 - app.routers.trazabilidad_router - INFO - Cancelación solicitada para la tarea 02b63a80-b679-445e-a88c-e58b241b25ea por aascanio@netpag.cl.
+2025-11-06 11:52:02,364 - app.routers.trazabilidad_router - INFO - [Task 02b63a80-b679-445e-a88c-e58b241b25ea] Tarea cancelada. Descartando resultados.
+2025-11-06 11:52:02,367 - app.routers.trazabilidad_router - INFO - [Task 02b63a80-b679-445e-a88c-e58b241b25ea] Sesión de DB de tarea cerrada.
