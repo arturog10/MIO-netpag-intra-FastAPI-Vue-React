@@ -1156,3 +1156,299 @@ FROM sys.columns JOIN sys.types ON sys.columns.user_type_id = sys.types.user_typ
 WHERE sys.columns.object_id = object_id(?) ORDER BY sys.columns.column_id]
 [parameters: (1, 'MS_Description', 'dbo.[1009_RTG_0020ACSA_]')]
 (Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-11-05 17:00:24,306 - app.database - ERROR - Sesión de DB 'rollback' para 'b2c' debido a error: 404: Tarea no encontrada o no completada. Vuelva a consultar.
+2025-11-05 17:00:24,306 - app.database - ERROR - Error en la sesión de DB 'b2c': 404: Tarea no encontrada o no completada. Vuelva a consultar.
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\database.py", line 52, in get_db_session
+    yield connection
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\concurrency.py", line 27, in contextmanager_in_threadpool
+    yield await run_in_threadpool(cm.__enter__)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 109, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 389, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 288, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\routers\trazabilidad_router.py", line 266, in export_trazabilidad_data
+    raise HTTPException(status_code=404, detail="Tarea no encontrada o no completada. Vuelva a consultar.")
+fastapi.exceptions.HTTPException: 404: Tarea no encontrada o no completada. Vuelva a consultar.
+2025-11-05 17:00:31,746 - app.database - ERROR - Sesión de DB 'rollback' para 'b2c' debido a error: 404: Tarea no encontrada o no completada. Vuelva a consultar.
+2025-11-05 17:00:31,747 - app.database - ERROR - Error en la sesión de DB 'b2c': 404: Tarea no encontrada o no completada. Vuelva a consultar.
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\database.py", line 52, in get_db_session
+    yield connection
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\concurrency.py", line 27, in contextmanager_in_threadpool
+    yield await run_in_threadpool(cm.__enter__)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 109, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 389, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 288, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\routers\trazabilidad_router.py", line 266, in export_trazabilidad_data
+    raise HTTPException(status_code=404, detail="Tarea no encontrada o no completada. Vuelva a consultar.")
+fastapi.exceptions.HTTPException: 404: Tarea no encontrada o no completada. Vuelva a consultar.
+2025-11-06 10:27:30,925 - app.db_user_operations - ERROR - Error durante la verificación de usuario: (pyodbc.OperationalError) ('08S01', '[08S01] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: Se ha forzado la interrupción de una conexión existente por el host remoto.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure (10054)')
+[SQL: SELECT sys.columns.name, sys.types.name AS name_1, sys.columns.is_nullable, sys.columns.max_length, sys.columns.[precision], sys.columns.scale, sys.default_constraints.definition, sys.columns.collation_name, sys.computed_columns.definition AS definition_1, sys.computed_columns.is_persisted, sys.identity_columns.is_identity, CAST(sys.identity_columns.seed_value AS NUMERIC(38, 0)) AS seed_value, CAST(sys.identity_columns.increment_value AS NUMERIC(38, 0)) AS increment_value, CAST(sys.extended_properties.value AS NVARCHAR(max)) AS comment 
+FROM sys.columns JOIN sys.types ON sys.columns.user_type_id = sys.types.user_type_id LEFT OUTER JOIN sys.default_constraints ON sys.default_constraints.object_id = sys.columns.default_object_id AND sys.default_constraints.parent_column_id = sys.columns.column_id LEFT OUTER JOIN sys.computed_columns ON sys.computed_columns.object_id = sys.columns.object_id AND sys.computed_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.identity_columns ON sys.identity_columns.object_id = sys.columns.object_id AND sys.identity_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.extended_properties ON sys.extended_properties.class = ? AND sys.extended_properties.name = CAST(? AS NVARCHAR(max)) AND sys.columns.object_id = sys.extended_properties.major_id AND sys.columns.column_id = sys.extended_properties.minor_id 
+WHERE sys.columns.object_id = object_id(?) ORDER BY sys.columns.column_id]
+[parameters: (1, 'MS_Description', 'dbo.[Usuarios]')]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+pyodbc.OperationalError: ('08S01', '[08S01] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: Se ha forzado la interrupción de una conexión existente por el host remoto.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure (10054)')
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\db_user_operations.py", line 50, in verificar_usuario_db
+    tabla = _get_reflected_table("tabla_usuarios")
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\db_operations.py", line 51, in _get_reflected_table
+    tabla = Table(
+        info["table_name"],
+    ...<2 lines>...
+        autoload_with=engine_para_reflejar
+    )
+  File "<string>", line 2, in __new__
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\util\deprecations.py", line 281, in warned
+    return fn(*args, **kwargs)  # type: ignore[no-any-return]
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 429, in __new__
+    return cls._new(*args, **kw)
+           ~~~~~~~~^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 483, in _new
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 479, in _new
+    table.__init__(name, metadata, *args, _no_init=False, **kw)  # type: ignore[misc] # noqa: E501
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 861, in __init__
+    self._autoload(
+    ~~~~~~~~~~~~~~^
+        metadata,
+        ^^^^^^^^^
+    ...<4 lines>...
+        resolve_fks=resolve_fks,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 893, in _autoload
+    conn_insp.reflect_table(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        self,
+        ^^^^^
+    ...<4 lines>...
+        _reflect_info=_reflect_info,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\reflection.py", line 1536, in reflect_table
+    _reflect_info = self._get_reflection_info(
+        schema,
+    ...<4 lines>...
+        **table.dialect_kwargs,
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\reflection.py", line 2019, in _get_reflection_info
+    columns=run(
+            ~~~^
+        self.get_multi_columns, check_filter_names_from_meth=True
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ),
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\reflection.py", line 2005, in run
+    res = meth(filter_names=_fn, **kw)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\reflection.py", line 931, in get_multi_columns
+    table_col_defs = dict(
+        self.dialect.get_multi_columns(
+    ...<7 lines>...
+        )
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 1135, in _default_multi_reflect
+    single_tbl_method(
+    ~~~~~~~~~~~~~~~~~^
+        connection, table, schema=schema, **kw
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ),
+    ^
+  File "<string>", line 2, in get_columns
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\reflection.py", line 106, in cache
+    ret = fn(self, con, *args, **kw)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\dialects\mssql\base.py", line 2902, in wrap
+    return _switch_db(
+        dbname,
+    ...<8 lines>...
+        **kw,
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\dialects\mssql\base.py", line 2926, in _switch_db
+    return fn(*arg, **kw)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\dialects\mssql\base.py", line 3740, in get_columns
+    c = connection.execution_options(**exec_opts).execute(s)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.OperationalError: (pyodbc.OperationalError) ('08S01', '[08S01] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: Se ha forzado la interrupción de una conexión existente por el host remoto.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure (10054)')
+[SQL: SELECT sys.columns.name, sys.types.name AS name_1, sys.columns.is_nullable, sys.columns.max_length, sys.columns.[precision], sys.columns.scale, sys.default_constraints.definition, sys.columns.collation_name, sys.computed_columns.definition AS definition_1, sys.computed_columns.is_persisted, sys.identity_columns.is_identity, CAST(sys.identity_columns.seed_value AS NUMERIC(38, 0)) AS seed_value, CAST(sys.identity_columns.increment_value AS NUMERIC(38, 0)) AS increment_value, CAST(sys.extended_properties.value AS NVARCHAR(max)) AS comment 
+FROM sys.columns JOIN sys.types ON sys.columns.user_type_id = sys.types.user_type_id LEFT OUTER JOIN sys.default_constraints ON sys.default_constraints.object_id = sys.columns.default_object_id AND sys.default_constraints.parent_column_id = sys.columns.column_id LEFT OUTER JOIN sys.computed_columns ON sys.computed_columns.object_id = sys.columns.object_id AND sys.computed_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.identity_columns ON sys.identity_columns.object_id = sys.columns.object_id AND sys.identity_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.extended_properties ON sys.extended_properties.class = ? AND sys.extended_properties.name = CAST(? AS NVARCHAR(max)) AND sys.columns.object_id = sys.extended_properties.major_id AND sys.columns.column_id = sys.extended_properties.minor_id 
+WHERE sys.columns.object_id = object_id(?) ORDER BY sys.columns.column_id]
+[parameters: (1, 'MS_Description', 'dbo.[Usuarios]')]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-11-06 10:27:31,495 - app.db_user_operations - ERROR - FALLO AL REGISTRAR AUDITORÍA: (pyodbc.OperationalError) ('08S01', '[08S01] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: Se ha forzado la interrupción de una conexión existente por el host remoto.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure (10054)')
+[SQL: INSERT INTO dbo.[AuditoriaUsuarios] (nombre_usuario, accion, detalles_json) OUTPUT inserted.id_log VALUES (?, ?, ?)]
+[parameters: ('aascanio@netpag.cl', 'login_fallido', '{"email": "aascanio@netpag.cl"}')]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+pyodbc.OperationalError: ('08S01', '[08S01] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: Se ha forzado la interrupción de una conexión existente por el host remoto.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure (10054)')
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\db_user_operations.py", line 96, in registrar_accion_db
+    db_session.execute(stmt)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.OperationalError: (pyodbc.OperationalError) ('08S01', '[08S01] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: Se ha forzado la interrupción de una conexión existente por el host remoto.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure (10054)')
+[SQL: INSERT INTO dbo.[AuditoriaUsuarios] (nombre_usuario, accion, detalles_json) OUTPUT inserted.id_log VALUES (?, ?, ?)]
+[parameters: ('aascanio@netpag.cl', 'login_fallido', '{"email": "aascanio@netpag.cl"}')]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-11-06 10:27:31,513 - app.database - ERROR - Sesión de DB 'rollback' para 'b2c' debido a error: 401: Correo o contraseña incorrecta
+2025-11-06 10:27:31,515 - app.database - ERROR - Error en la sesión de DB 'b2c': 401: Correo o contraseña incorrecta
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\database.py", line 52, in get_db_session
+    yield connection
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\concurrency.py", line 27, in contextmanager_in_threadpool
+    yield await run_in_threadpool(cm.__enter__)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 109, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 389, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 288, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\routers\auth_router.py", line 68, in login_for_access_token
+    raise HTTPException(
+    ...<3 lines>...
+    )
+fastapi.exceptions.HTTPException: 401: Correo o contraseña incorrecta

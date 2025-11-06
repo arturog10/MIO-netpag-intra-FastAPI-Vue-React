@@ -1876,3 +1876,1073 @@ WHERE sys.columns.object_id = object_id(?) ORDER BY sys.columns.column_id]
 2025-11-05 14:17:27,775 - app.db_operations - INFO - Se encontraron 0 estrategias activas para '0200ENTE'.
 2025-11-05 14:17:27,970 - app.db_operations - INFO - Aplicando orden por defecto (columna 1)
 2025-11-05 14:17:27,971 - app.db_operations - INFO - Ejecutando consulta (paginada) con params: {}
+2025-11-05 16:53:31,645 - root - INFO - Sistema de logging configurado correctamente.
+2025-11-05 16:54:05,067 - app.db_user_operations - INFO - Login exitoso para el email: aascanio@netpag.cl
+2025-11-05 16:54:24,663 - app.routers.trazabilidad_router - INFO - Tarea d88c056a-76e5-4550-931a-53c8b60fd757 iniciada por aascanio@netpag.cl.
+2025-11-05 16:54:24,665 - app.routers.trazabilidad_router - INFO - [Task d88c056a-76e5-4550-931a-53c8b60fd757] Iniciando consulta TRAF para aascanio@netpag.cl...
+2025-11-05 16:54:24,814 - app.db_traf_operations - INFO - Ejecutando consulta en la vista TRAF: SELECT "PERIODO", "SEMANA", "CLIENTE", "CAMPANA", "RUT", "TIPO", "TELEFONO", "FECHA", "HORA", "GESTION", "DURACION", "FECHAHORA", "TIPIFICACION", "VALOR_UNITARIO", "VALOR_MINUTAJE", "RUTDV", "IC", "CODIGOCAMP", "PROVEEDOR", "SUBCATEGORIA", "OrigenTabla" 
+FROM dbo."vw_TrafMasividades" 
+WHERE CAST("RUT" AS VARCHAR(255)) = :param_rut AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) >= :desde_param_fecha AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) <= :hasta_param_fecha ORDER BY dbo."vw_TrafMasividades"."PERIODO" con parámetros: {'param_rut': '17564436', 'desde_param_fecha': '2025-01-01', 'hasta_param_fecha': '2025-11-05'}
+2025-11-05 16:59:50,106 - app.routers.trazabilidad_router - INFO - [Task d88c056a-76e5-4550-931a-53c8b60fd757] Consulta completada. 37 filas.
+2025-11-05 16:59:50,112 - app.routers.trazabilidad_router - INFO - [Task d88c056a-76e5-4550-931a-53c8b60fd757] Sesión de DB de tarea cerrada.
+2025-11-05 16:59:55,014 - app.routers.trazabilidad_router - INFO - Resultados de d88c056a-76e5-4550-931a-53c8b60fd757 entregados. Tarea limpiada.
+2025-11-05 17:00:24,306 - app.database - ERROR - Sesión de DB 'rollback' para 'b2c' debido a error: 404: Tarea no encontrada o no completada. Vuelva a consultar.
+2025-11-05 17:00:24,306 - app.database - ERROR - Error en la sesión de DB 'b2c': 404: Tarea no encontrada o no completada. Vuelva a consultar.
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\database.py", line 52, in get_db_session
+    yield connection
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\concurrency.py", line 27, in contextmanager_in_threadpool
+    yield await run_in_threadpool(cm.__enter__)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 109, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 389, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 288, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\routers\trazabilidad_router.py", line 266, in export_trazabilidad_data
+    raise HTTPException(status_code=404, detail="Tarea no encontrada o no completada. Vuelva a consultar.")
+fastapi.exceptions.HTTPException: 404: Tarea no encontrada o no completada. Vuelva a consultar.
+2025-11-05 17:00:31,746 - app.database - ERROR - Sesión de DB 'rollback' para 'b2c' debido a error: 404: Tarea no encontrada o no completada. Vuelva a consultar.
+2025-11-05 17:00:31,747 - app.database - ERROR - Error en la sesión de DB 'b2c': 404: Tarea no encontrada o no completada. Vuelva a consultar.
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\database.py", line 52, in get_db_session
+    yield connection
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\concurrency.py", line 27, in contextmanager_in_threadpool
+    yield await run_in_threadpool(cm.__enter__)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 109, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 389, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 288, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\routers\trazabilidad_router.py", line 266, in export_trazabilidad_data
+    raise HTTPException(status_code=404, detail="Tarea no encontrada o no completada. Vuelva a consultar.")
+fastapi.exceptions.HTTPException: 404: Tarea no encontrada o no completada. Vuelva a consultar.
+2025-11-06 08:47:52,518 - root - INFO - Sistema de logging configurado correctamente.
+2025-11-06 08:57:39,355 - root - INFO - Sistema de logging configurado correctamente.
+2025-11-06 09:04:54,434 - app.db_user_operations - INFO - Login exitoso para el email: aascanio@netpag.cl
+2025-11-06 09:05:00,320 - app.db_operations - INFO - Se encontraron 4 estrategias activas para '0020ACSA'.
+2025-11-06 09:05:01,006 - app.db_operations - INFO - Aplicando orden por defecto (columna 1)
+2025-11-06 09:05:01,007 - app.db_operations - INFO - Ejecutando consulta (paginada) con params: {}
+2025-11-06 09:06:39,950 - app.routers.trazabilidad_router - INFO - Tarea 77cf66a0-fe0d-4570-8582-8638c35f4e3b iniciada por aascanio@netpag.cl.
+2025-11-06 09:06:39,952 - app.routers.trazabilidad_router - INFO - [Task 77cf66a0-fe0d-4570-8582-8638c35f4e3b] Iniciando consulta TRAF para aascanio@netpag.cl...
+2025-11-06 09:06:40,082 - app.db_traf_operations - INFO - Ejecutando consulta en la vista TRAF: SELECT "PERIODO", "SEMANA", "CLIENTE", "CAMPANA", "RUT", "USUARIO", "TELEFONO", "FECHA", "HORA", "RESP_TELEFONIA", "CATEGORIA", "SUBCATEGORIA", "SUBCATEGORIA1", "TIPO_DISCADOR", "DURACION", "GRABACION", "FECHAHORA", "TIPIFICACION", "VALOR_UNITARIO", "VALOR_MINUTAJE", "RUTDV", "OrigenTabla" 
+FROM dbo."vw_TrafDiscador" 
+WHERE lower(CAST("CLIENTE" AS VARCHAR(255))) LIKE :param_cliente AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) >= :desde_param_fecha AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) <= :hasta_param_fecha ORDER BY dbo."vw_TrafDiscador"."PERIODO" con parámetros: {'param_cliente': '%lider%', 'desde_param_fecha': '2025-11-04', 'hasta_param_fecha': '2025-11-05'}
+2025-11-06 09:08:40,333 - app.routers.trazabilidad_router - INFO - [Task 77cf66a0-fe0d-4570-8582-8638c35f4e3b] Consulta completada. 0 filas.
+2025-11-06 09:08:40,335 - app.routers.trazabilidad_router - INFO - [Task 77cf66a0-fe0d-4570-8582-8638c35f4e3b] Sesión de DB de tarea cerrada.
+2025-11-06 09:08:40,368 - app.routers.trazabilidad_router - INFO - Resultados de 77cf66a0-fe0d-4570-8582-8638c35f4e3b entregados. La tarea permanece en caché para exportación.
+2025-11-06 09:21:41,299 - root - INFO - Sistema de logging configurado correctamente.
+2025-11-06 09:23:10,155 - app.routers.trazabilidad_router - INFO - Tarea 55e9b70f-ffa9-4b83-b0c1-2c5002a1b6c3 iniciada por aascanio@netpag.cl.
+2025-11-06 09:23:10,157 - app.routers.trazabilidad_router - INFO - [Task 55e9b70f-ffa9-4b83-b0c1-2c5002a1b6c3] Iniciando consulta TRAF para aascanio@netpag.cl...
+2025-11-06 09:23:10,302 - app.db_traf_operations - INFO - Ejecutando consulta en la vista TRAF: SELECT "PERIODO", "SEMANA", "CLIENTE", "CAMPANA", "RUT", "USUARIO", "TELEFONO", "FECHA", "HORA", "RESP_TELEFONIA", "CATEGORIA", "SUBCATEGORIA", "SUBCATEGORIA1", "TIPO_DISCADOR", "DURACION", "GRABACION", "FECHAHORA", "TIPIFICACION", "VALOR_UNITARIO", "VALOR_MINUTAJE", "RUTDV", "OrigenTabla" 
+FROM dbo."vw_TrafDiscador" 
+WHERE CAST("RUT" AS VARCHAR(255)) = :param_rut AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) >= :desde_param_fecha AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) <= :hasta_param_fecha ORDER BY dbo."vw_TrafDiscador"."PERIODO" con parámetros: {'param_rut': '26625480', 'desde_param_fecha': '2025-11-03', 'hasta_param_fecha': '2025-11-04'}
+2025-11-06 09:24:51,268 - app.routers.trazabilidad_router - INFO - [Task 55e9b70f-ffa9-4b83-b0c1-2c5002a1b6c3] Consulta completada. 1 filas.
+2025-11-06 09:24:51,270 - app.routers.trazabilidad_router - INFO - [Task 55e9b70f-ffa9-4b83-b0c1-2c5002a1b6c3] Sesión de DB de tarea cerrada.
+2025-11-06 09:25:00,519 - app.routers.trazabilidad_router - INFO - Resultados de 55e9b70f-ffa9-4b83-b0c1-2c5002a1b6c3 entregados. La tarea permanece en caché para exportación.
+2025-11-06 09:25:56,005 - app.routers.trazabilidad_router - INFO - Tarea 55e9b70f-ffa9-4b83-b0c1-2c5002a1b6c3 (estado: complete) limpiada de la memoria por aascanio@netpag.cl.
+2025-11-06 09:26:10,748 - app.routers.trazabilidad_router - INFO - Tarea 0d234d65-fc8c-4c9a-a187-4e0870f8c882 iniciada por aascanio@netpag.cl.
+2025-11-06 09:26:10,751 - app.routers.trazabilidad_router - INFO - [Task 0d234d65-fc8c-4c9a-a187-4e0870f8c882] Iniciando consulta TRAF para aascanio@netpag.cl...
+2025-11-06 09:26:10,871 - app.db_traf_operations - INFO - Ejecutando consulta en la vista TRAF: SELECT "PERIODO", "SEMANA", "CLIENTE", "CAMPANA", "RUT", "USUARIO", "TELEFONO", "FECHA", "HORA", "RESP_TELEFONIA", "CATEGORIA", "SUBCATEGORIA", "SUBCATEGORIA1", "TIPO_DISCADOR", "DURACION", "GRABACION", "FECHAHORA", "TIPIFICACION", "VALOR_UNITARIO", "VALOR_MINUTAJE", "RUTDV", "OrigenTabla" 
+FROM dbo."vw_TrafDiscador" 
+WHERE lower(CAST("RUT" AS VARCHAR(255))) LIKE :param_rut AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) >= :desde_param_fecha AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) <= :hasta_param_fecha ORDER BY dbo."vw_TrafDiscador"."PERIODO" con parámetros: {'param_rut': '%26625480%', 'desde_param_fecha': '2025-11-03', 'hasta_param_fecha': '2025-11-04'}
+2025-11-06 09:26:36,367 - app.routers.trazabilidad_router - INFO - [Task 0d234d65-fc8c-4c9a-a187-4e0870f8c882] Consulta completada. 1 filas.
+2025-11-06 09:26:36,369 - app.routers.trazabilidad_router - INFO - [Task 0d234d65-fc8c-4c9a-a187-4e0870f8c882] Sesión de DB de tarea cerrada.
+2025-11-06 09:26:41,118 - app.routers.trazabilidad_router - INFO - Resultados de 0d234d65-fc8c-4c9a-a187-4e0870f8c882 entregados. La tarea permanece en caché para exportación.
+2025-11-06 09:26:51,702 - app.routers.trazabilidad_router - INFO - Tarea 0d234d65-fc8c-4c9a-a187-4e0870f8c882 (estado: complete) limpiada de la memoria por aascanio@netpag.cl.
+2025-11-06 09:27:05,401 - app.routers.trazabilidad_router - INFO - Tarea a1b41f6a-a45e-4205-957d-1006ec1db263 iniciada por aascanio@netpag.cl.
+2025-11-06 09:27:05,404 - app.routers.trazabilidad_router - INFO - [Task a1b41f6a-a45e-4205-957d-1006ec1db263] Iniciando consulta TRAF para aascanio@netpag.cl...
+2025-11-06 09:27:05,498 - app.db_traf_operations - INFO - Ejecutando consulta en la vista TRAF: SELECT "PERIODO", "SEMANA", "CLIENTE", "CAMPANA", "RUT", "USUARIO", "TELEFONO", "FECHA", "HORA", "RESP_TELEFONIA", "CATEGORIA", "SUBCATEGORIA", "SUBCATEGORIA1", "TIPO_DISCADOR", "DURACION", "GRABACION", "FECHAHORA", "TIPIFICACION", "VALOR_UNITARIO", "VALOR_MINUTAJE", "RUTDV", "OrigenTabla" 
+FROM dbo."vw_TrafDiscador" 
+WHERE (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) >= :desde_param_fecha AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) <= :hasta_param_fecha ORDER BY dbo."vw_TrafDiscador"."PERIODO" con parámetros: {'desde_param_fecha': '2025-11-03', 'hasta_param_fecha': '2025-11-04'}
+2025-11-06 09:28:39,935 - app.routers.trazabilidad_router - INFO - [Task a1b41f6a-a45e-4205-957d-1006ec1db263] Consulta completada. 508243 filas.
+2025-11-06 09:28:39,939 - app.routers.trazabilidad_router - INFO - [Task a1b41f6a-a45e-4205-957d-1006ec1db263] Sesión de DB de tarea cerrada.
+2025-11-06 09:28:45,849 - app.routers.trazabilidad_router - INFO - Resultados de a1b41f6a-a45e-4205-957d-1006ec1db263 entregados. La tarea permanece en caché para exportación.
+2025-11-06 09:34:54,143 - app.routers.trazabilidad_router - INFO - Tarea a1b41f6a-a45e-4205-957d-1006ec1db263 (estado: complete) limpiada de la memoria por aascanio@netpag.cl.
+2025-11-06 10:27:30,925 - app.db_user_operations - ERROR - Error durante la verificación de usuario: (pyodbc.OperationalError) ('08S01', '[08S01] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: Se ha forzado la interrupción de una conexión existente por el host remoto.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure (10054)')
+[SQL: SELECT sys.columns.name, sys.types.name AS name_1, sys.columns.is_nullable, sys.columns.max_length, sys.columns.[precision], sys.columns.scale, sys.default_constraints.definition, sys.columns.collation_name, sys.computed_columns.definition AS definition_1, sys.computed_columns.is_persisted, sys.identity_columns.is_identity, CAST(sys.identity_columns.seed_value AS NUMERIC(38, 0)) AS seed_value, CAST(sys.identity_columns.increment_value AS NUMERIC(38, 0)) AS increment_value, CAST(sys.extended_properties.value AS NVARCHAR(max)) AS comment 
+FROM sys.columns JOIN sys.types ON sys.columns.user_type_id = sys.types.user_type_id LEFT OUTER JOIN sys.default_constraints ON sys.default_constraints.object_id = sys.columns.default_object_id AND sys.default_constraints.parent_column_id = sys.columns.column_id LEFT OUTER JOIN sys.computed_columns ON sys.computed_columns.object_id = sys.columns.object_id AND sys.computed_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.identity_columns ON sys.identity_columns.object_id = sys.columns.object_id AND sys.identity_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.extended_properties ON sys.extended_properties.class = ? AND sys.extended_properties.name = CAST(? AS NVARCHAR(max)) AND sys.columns.object_id = sys.extended_properties.major_id AND sys.columns.column_id = sys.extended_properties.minor_id 
+WHERE sys.columns.object_id = object_id(?) ORDER BY sys.columns.column_id]
+[parameters: (1, 'MS_Description', 'dbo.[Usuarios]')]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+pyodbc.OperationalError: ('08S01', '[08S01] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: Se ha forzado la interrupción de una conexión existente por el host remoto.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure (10054)')
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\db_user_operations.py", line 50, in verificar_usuario_db
+    tabla = _get_reflected_table("tabla_usuarios")
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\db_operations.py", line 51, in _get_reflected_table
+    tabla = Table(
+        info["table_name"],
+    ...<2 lines>...
+        autoload_with=engine_para_reflejar
+    )
+  File "<string>", line 2, in __new__
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\util\deprecations.py", line 281, in warned
+    return fn(*args, **kwargs)  # type: ignore[no-any-return]
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 429, in __new__
+    return cls._new(*args, **kw)
+           ~~~~~~~~^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 483, in _new
+    with util.safe_reraise():
+         ~~~~~~~~~~~~~~~~~^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 224, in __exit__
+    raise exc_value.with_traceback(exc_tb)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 479, in _new
+    table.__init__(name, metadata, *args, _no_init=False, **kw)  # type: ignore[misc] # noqa: E501
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 861, in __init__
+    self._autoload(
+    ~~~~~~~~~~~~~~^
+        metadata,
+        ^^^^^^^^^
+    ...<4 lines>...
+        resolve_fks=resolve_fks,
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\schema.py", line 893, in _autoload
+    conn_insp.reflect_table(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        self,
+        ^^^^^
+    ...<4 lines>...
+        _reflect_info=_reflect_info,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\reflection.py", line 1536, in reflect_table
+    _reflect_info = self._get_reflection_info(
+        schema,
+    ...<4 lines>...
+        **table.dialect_kwargs,
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\reflection.py", line 2019, in _get_reflection_info
+    columns=run(
+            ~~~^
+        self.get_multi_columns, check_filter_names_from_meth=True
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ),
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\reflection.py", line 2005, in run
+    res = meth(filter_names=_fn, **kw)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\reflection.py", line 931, in get_multi_columns
+    table_col_defs = dict(
+        self.dialect.get_multi_columns(
+    ...<7 lines>...
+        )
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 1135, in _default_multi_reflect
+    single_tbl_method(
+    ~~~~~~~~~~~~~~~~~^
+        connection, table, schema=schema, **kw
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ),
+    ^
+  File "<string>", line 2, in get_columns
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\reflection.py", line 106, in cache
+    ret = fn(self, con, *args, **kw)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\dialects\mssql\base.py", line 2902, in wrap
+    return _switch_db(
+        dbname,
+    ...<8 lines>...
+        **kw,
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\dialects\mssql\base.py", line 2926, in _switch_db
+    return fn(*arg, **kw)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\dialects\mssql\base.py", line 3740, in get_columns
+    c = connection.execution_options(**exec_opts).execute(s)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.OperationalError: (pyodbc.OperationalError) ('08S01', '[08S01] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: Se ha forzado la interrupción de una conexión existente por el host remoto.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure (10054)')
+[SQL: SELECT sys.columns.name, sys.types.name AS name_1, sys.columns.is_nullable, sys.columns.max_length, sys.columns.[precision], sys.columns.scale, sys.default_constraints.definition, sys.columns.collation_name, sys.computed_columns.definition AS definition_1, sys.computed_columns.is_persisted, sys.identity_columns.is_identity, CAST(sys.identity_columns.seed_value AS NUMERIC(38, 0)) AS seed_value, CAST(sys.identity_columns.increment_value AS NUMERIC(38, 0)) AS increment_value, CAST(sys.extended_properties.value AS NVARCHAR(max)) AS comment 
+FROM sys.columns JOIN sys.types ON sys.columns.user_type_id = sys.types.user_type_id LEFT OUTER JOIN sys.default_constraints ON sys.default_constraints.object_id = sys.columns.default_object_id AND sys.default_constraints.parent_column_id = sys.columns.column_id LEFT OUTER JOIN sys.computed_columns ON sys.computed_columns.object_id = sys.columns.object_id AND sys.computed_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.identity_columns ON sys.identity_columns.object_id = sys.columns.object_id AND sys.identity_columns.column_id = sys.columns.column_id LEFT OUTER JOIN sys.extended_properties ON sys.extended_properties.class = ? AND sys.extended_properties.name = CAST(? AS NVARCHAR(max)) AND sys.columns.object_id = sys.extended_properties.major_id AND sys.columns.column_id = sys.extended_properties.minor_id 
+WHERE sys.columns.object_id = object_id(?) ORDER BY sys.columns.column_id]
+[parameters: (1, 'MS_Description', 'dbo.[Usuarios]')]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-11-06 10:27:31,495 - app.db_user_operations - ERROR - FALLO AL REGISTRAR AUDITORÍA: (pyodbc.OperationalError) ('08S01', '[08S01] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: Se ha forzado la interrupción de una conexión existente por el host remoto.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure (10054)')
+[SQL: INSERT INTO dbo.[AuditoriaUsuarios] (nombre_usuario, accion, detalles_json) OUTPUT inserted.id_log VALUES (?, ?, ?)]
+[parameters: ('aascanio@netpag.cl', 'login_fallido', '{"email": "aascanio@netpag.cl"}')]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+pyodbc.OperationalError: ('08S01', '[08S01] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: Se ha forzado la interrupción de una conexión existente por el host remoto.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure (10054)')
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\db_user_operations.py", line 96, in registrar_accion_db
+    db_session.execute(stmt)
+    ~~~~~~~~~~~~~~~~~~^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1419, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 526, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1641, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<8 lines>...
+        cache_hit=cache_hit,
+    )
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 951, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.OperationalError: (pyodbc.OperationalError) ('08S01', '[08S01] [Microsoft][ODBC Driver 17 for SQL Server]TCP Provider: Se ha forzado la interrupción de una conexión existente por el host remoto.\r\n (10054) (SQLExecDirectW); [08S01] [Microsoft][ODBC Driver 17 for SQL Server]Communication link failure (10054)')
+[SQL: INSERT INTO dbo.[AuditoriaUsuarios] (nombre_usuario, accion, detalles_json) OUTPUT inserted.id_log VALUES (?, ?, ?)]
+[parameters: ('aascanio@netpag.cl', 'login_fallido', '{"email": "aascanio@netpag.cl"}')]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+2025-11-06 10:27:31,513 - app.database - ERROR - Sesión de DB 'rollback' para 'b2c' debido a error: 401: Correo o contraseña incorrecta
+2025-11-06 10:27:31,515 - app.database - ERROR - Error en la sesión de DB 'b2c': 401: Correo o contraseña incorrecta
+Traceback (most recent call last):
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\database.py", line 52, in get_db_session
+    yield connection
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\concurrency.py", line 27, in contextmanager_in_threadpool
+    yield await run_in_threadpool(cm.__enter__)
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 109, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 389, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\venv\Lib\site-packages\fastapi\routing.py", line 288, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\NETPAG\DesarrolloOrganizado\nueva-intra\backend\app\routers\auth_router.py", line 68, in login_for_access_token
+    raise HTTPException(
+    ...<3 lines>...
+    )
+fastapi.exceptions.HTTPException: 401: Correo o contraseña incorrecta
+2025-11-06 10:27:36,278 - app.db_user_operations - INFO - Login exitoso para el email: aascanio@netpag.cl
+2025-11-06 10:28:03,857 - app.routers.trazabilidad_router - INFO - Tarea f327b552-ecd9-4fd6-b99f-97afee6ce65c iniciada por aascanio@netpag.cl.
+2025-11-06 10:28:03,860 - app.routers.trazabilidad_router - INFO - [Task f327b552-ecd9-4fd6-b99f-97afee6ce65c] Iniciando consulta TRAF para aascanio@netpag.cl...
+2025-11-06 10:28:03,991 - app.db_traf_operations - INFO - Ejecutando consulta en la vista TRAF: SELECT "PERIODO", "SEMANA", "CLIENTE", "CAMPANA", "RUT", "USUARIO", "TELEFONO", "FECHA", "HORA", "RESP_TELEFONIA", "CATEGORIA", "SUBCATEGORIA", "SUBCATEGORIA1", "TIPO_DISCADOR", "DURACION", "GRABACION", "FECHAHORA", "TIPIFICACION", "VALOR_UNITARIO", "VALOR_MINUTAJE", "RUTDV", "OrigenTabla" 
+FROM dbo."vw_TrafDiscador" 
+WHERE (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) >= :desde_param_fecha AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) <= :hasta_param_fecha ORDER BY dbo."vw_TrafDiscador"."PERIODO" con parámetros: {'desde_param_fecha': '2025-11-04', 'hasta_param_fecha': '2025-11-05'}
+2025-11-06 10:28:06,644 - app.routers.trazabilidad_router - INFO - Cancelación solicitada para la tarea f327b552-ecd9-4fd6-b99f-97afee6ce65c por aascanio@netpag.cl.
+2025-11-06 10:29:45,180 - app.routers.trazabilidad_router - INFO - [Task f327b552-ecd9-4fd6-b99f-97afee6ce65c] Tarea cancelada. Descartando resultados.
+2025-11-06 10:29:45,192 - app.routers.trazabilidad_router - INFO - [Task f327b552-ecd9-4fd6-b99f-97afee6ce65c] Sesión de DB de tarea cerrada.
+2025-11-06 11:22:30,425 - app.routers.trazabilidad_router - INFO - Tarea 85677760-a67e-47d5-a7cf-2b8cfa4c5ce4 iniciada por aascanio@netpag.cl.
+2025-11-06 11:22:30,439 - app.routers.trazabilidad_router - INFO - [Task 85677760-a67e-47d5-a7cf-2b8cfa4c5ce4] Iniciando consulta TRAF para aascanio@netpag.cl...
+2025-11-06 11:22:30,619 - app.db_traf_operations - INFO - Ejecutando consulta en la vista TRAF: SELECT "PERIODO", "SEMANA", "CLIENTE", "CAMPANA", "RUT", "TIPO", "TELEFONO", "FECHA", "HORA", "GESTION", "DURACION", "FECHAHORA", "TIPIFICACION", "VALOR_UNITARIO", "VALOR_MINUTAJE", "RUTDV", "IC", "CODIGOCAMP", "PROVEEDOR", "SUBCATEGORIA", "OrigenTabla" 
+FROM dbo."vw_TrafMasividades" 
+WHERE (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) >= :desde_param_fecha AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) <= :hasta_param_fecha ORDER BY dbo."vw_TrafMasividades"."PERIODO" con parámetros: {'desde_param_fecha': '2025-11-04', 'hasta_param_fecha': '2025-11-05'}
+2025-11-06 11:22:36,151 - app.routers.trazabilidad_router - INFO - Cancelación solicitada para la tarea 85677760-a67e-47d5-a7cf-2b8cfa4c5ce4 por aascanio@netpag.cl.
+2025-11-06 11:30:27,598 - app.db_user_operations - INFO - Login exitoso para el email: aascanio@netpag.cl
+2025-11-06 11:30:41,336 - app.routers.trazabilidad_router - INFO - Tarea 8345aaf2-f06f-41dd-9b6a-90b7d95f807c iniciada por aascanio@netpag.cl.
+2025-11-06 11:30:41,339 - app.routers.trazabilidad_router - INFO - [Task 8345aaf2-f06f-41dd-9b6a-90b7d95f807c] Iniciando consulta TRAF para aascanio@netpag.cl...
+2025-11-06 11:30:41,559 - app.db_traf_operations - INFO - Ejecutando consulta en la vista TRAF: SELECT "PERIODO", "SEMANA", "CLIENTE", "CAMPANA", "RUT", "USUARIO", "TELEFONO", "FECHA", "HORA", "RESP_TELEFONIA", "CATEGORIA", "SUBCATEGORIA", "SUBCATEGORIA1", "TIPO_DISCADOR", "DURACION", "GRABACION", "FECHAHORA", "TIPIFICACION", "VALOR_UNITARIO", "VALOR_MINUTAJE", "RUTDV", "OrigenTabla" 
+FROM dbo."vw_TrafDiscador" 
+WHERE (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) >= :desde_param_fecha AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) <= :hasta_param_fecha ORDER BY dbo."vw_TrafDiscador"."PERIODO" con parámetros: {'desde_param_fecha': '2025-11-03', 'hasta_param_fecha': '2025-11-04'}
+2025-11-06 11:30:46,670 - app.routers.trazabilidad_router - INFO - Cancelación solicitada para la tarea 8345aaf2-f06f-41dd-9b6a-90b7d95f807c por aascanio@netpag.cl.
+2025-11-06 11:32:58,909 - app.routers.trazabilidad_router - INFO - [Task 85677760-a67e-47d5-a7cf-2b8cfa4c5ce4] Tarea cancelada. Descartando resultados.
+2025-11-06 11:32:59,021 - app.routers.trazabilidad_router - INFO - [Task 85677760-a67e-47d5-a7cf-2b8cfa4c5ce4] Sesión de DB de tarea cerrada.
+2025-11-06 11:34:58,667 - app.routers.trazabilidad_router - INFO - [Task 8345aaf2-f06f-41dd-9b6a-90b7d95f807c] Tarea cancelada. Descartando resultados.
+2025-11-06 11:34:58,670 - app.routers.trazabilidad_router - INFO - [Task 8345aaf2-f06f-41dd-9b6a-90b7d95f807c] Sesión de DB de tarea cerrada.
+2025-11-06 11:38:26,280 - app.routers.trazabilidad_router - INFO - Tarea d271f90a-0c90-4cb1-b4bf-ee9ad789e519 iniciada por aascanio@netpag.cl.
+2025-11-06 11:38:26,283 - app.routers.trazabilidad_router - INFO - [Task d271f90a-0c90-4cb1-b4bf-ee9ad789e519] Iniciando consulta TRAF para aascanio@netpag.cl...
+2025-11-06 11:38:26,466 - app.db_traf_operations - INFO - Ejecutando consulta en la vista TRAF: SELECT "PERIODO", "SEMANA", "CLIENTE", "CAMPANA", "RUT", "USUARIO", "TELEFONO", "FECHA", "HORA", "RESP_TELEFONIA", "CATEGORIA", "SUBCATEGORIA", "SUBCATEGORIA1", "TIPO_DISCADOR", "DURACION", "GRABACION", "FECHAHORA", "TIPIFICACION", "VALOR_UNITARIO", "VALOR_MINUTAJE", "RUTDV", "OrigenTabla" 
+FROM dbo."vw_TrafDiscador" 
+WHERE (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) >= :desde_param_fecha AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) <= :hasta_param_fecha ORDER BY dbo."vw_TrafDiscador"."PERIODO" con parámetros: {'desde_param_fecha': '2025-11-03', 'hasta_param_fecha': '2025-11-04'}
+2025-11-06 11:38:34,574 - app.routers.trazabilidad_router - INFO - Cancelación solicitada para la tarea d271f90a-0c90-4cb1-b4bf-ee9ad789e519 por aascanio@netpag.cl.
+2025-11-06 11:38:45,963 - app.routers.trazabilidad_router - INFO - Tarea b3bd28ed-e071-4146-8377-5d54645f55c6 iniciada por aascanio@netpag.cl.
+2025-11-06 11:38:45,965 - app.routers.trazabilidad_router - INFO - [Task b3bd28ed-e071-4146-8377-5d54645f55c6] Iniciando consulta TRAF para aascanio@netpag.cl...
+2025-11-06 11:38:46,174 - app.db_traf_operations - INFO - Ejecutando consulta en la vista TRAF: SELECT "PERIODO", "SEMANA", "CLIENTE", "CAMPANA", "RUT", "USUARIO", "TELEFONO", "FECHA", "HORA", "RESP_TELEFONIA", "CATEGORIA", "SUBCATEGORIA", "SUBCATEGORIA1", "TIPO_DISCADOR", "DURACION", "GRABACION", "FECHAHORA", "TIPIFICACION", "VALOR_UNITARIO", "VALOR_MINUTAJE", "RUTDV", "OrigenTabla" 
+FROM dbo."vw_TrafDiscador" 
+WHERE (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) >= :desde_param_fecha AND (
+        CASE
+            -- Si ya es tipo DATE, usarlo directamente
+            WHEN SQL_VARIANT_PROPERTY([FECHA], 'BaseType') = 'date' 
+                THEN CAST([FECHA] AS DATE)
+            
+            -- Formato YYYYMMDD (8 dígitos)
+            WHEN LEN(REPLACE(REPLACE([FECHA], ';', ''), ' ', '')) = 8 
+                AND ISDATE(LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([FECHA], ';', ''), ' ', ''), 8), 112)
+            
+            -- Formato DD/MM/YYYY (103)
+            WHEN CHARINDEX('/', [FECHA]) > 0 
+                AND ISDATE(LEFT(REPLACE([FECHA], ';', ''), 10)) = 1
+                THEN CONVERT(DATE, LEFT(REPLACE([FECHA], ';', ''), 10), 103)
+            
+            -- Formato DD-MM-YYYY (105)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 3, 1) = '-'
+                AND ISDATE(LEFT([FECHA], 10)) = 1
+                THEN CONVERT(DATE, LEFT([FECHA], 10), 105)
+            
+            -- Formato ISO YYYY-MM-DD (120 o 126)
+            WHEN CHARINDEX('-', [FECHA]) > 0 
+                AND SUBSTRING([FECHA], 5, 1) = '-'
+                AND ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA], 120)
+            
+            -- Intento genérico con CONVERT
+            WHEN ISDATE([FECHA]) = 1
+                THEN CONVERT(DATE, [FECHA])
+            
+            ELSE NULL
+        END
+    ) <= :hasta_param_fecha AND lower(CAST("CATEGORIA" AS VARCHAR(255))) LIKE :param_categoria ORDER BY dbo."vw_TrafDiscador"."PERIODO" con parámetros: {'desde_param_fecha': '2025-11-03', 'hasta_param_fecha': '2025-11-04', 'param_categoria': '%asdasdsdsd%'}
+2025-11-06 11:39:05,088 - app.routers.trazabilidad_router - INFO - Cancelación solicitada para la tarea b3bd28ed-e071-4146-8377-5d54645f55c6 por aascanio@netpag.cl.
+2025-11-06 11:39:25,862 - app.routers.trazabilidad_router - INFO - [Task b3bd28ed-e071-4146-8377-5d54645f55c6] Tarea cancelada. Descartando resultados.
+2025-11-06 11:39:25,865 - app.routers.trazabilidad_router - INFO - [Task b3bd28ed-e071-4146-8377-5d54645f55c6] Sesión de DB de tarea cerrada.
+2025-11-06 11:39:55,568 - app.routers.trazabilidad_router - INFO - [Task d271f90a-0c90-4cb1-b4bf-ee9ad789e519] Tarea cancelada. Descartando resultados.
+2025-11-06 11:39:55,570 - app.routers.trazabilidad_router - INFO - [Task d271f90a-0c90-4cb1-b4bf-ee9ad789e519] Sesión de DB de tarea cerrada.

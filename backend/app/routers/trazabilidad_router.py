@@ -229,6 +229,11 @@ async def cancel_trazabilidad_query(
             
         return {"status": "cancellation_requested"}
     
+    if task["status"] in ["complete", "error", "cancelled"]:
+        tasks_db.pop(task_id, None)
+        log.info(f"Tarea {task_id} (estado: {task["status"]}) limpiada de la memoria por {current_user_email}.")
+        return {"status": "cleared"}
+    
     return {"status": task["status"]}
 
 # --- Endpoint 5: Obtener Resultados (Al finalizar) ---
@@ -244,9 +249,7 @@ async def get_task_results(task_id: str):
         raise HTTPException(status_code=400, detail=f"La tarea no está completa. Estado: {task['status']}")
     
     data = task["data"]
-    # Limpia la memoria
-    tasks_db.pop(task_id, None)
-    log.info(f"Resultados de {task_id} entregados. Tarea limpiada.")
+    log.info(f"Resultados de {task_id} entregados. La tarea permanece en caché para exportación.")
     return data
 
 # --- Endpoint 6: Exportar (Usa los resultados cacheados) ---
