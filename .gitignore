@@ -2,6 +2,8 @@
 /backend/venv/
 /backend/__pycache__/
 /backend/.env
+/backend/logs/
+
 *.pyc
 
 # Node / Frontend

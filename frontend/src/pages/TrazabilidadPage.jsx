@@ -15,6 +15,7 @@ import { Calendar } from 'primereact/calendar';
 import { Toast } from 'primereact/toast';
 import { ProgressSpinner } from 'primereact/progressspinner';
 import { MultiSelect } from 'primereact/multiselect'; // Para el selector de columnas
+import { Dialog } from 'primereact/dialog';
 
 // --- Estilos Globales (Asume que este archivo existe) ---
 import { btnPrimary, btnSecondary, btnDanger, selectClass, calendarInputClass } from '../styles/appStyles';
@@ -58,6 +59,8 @@ function TrazabilidadPage() {
     const [first, setFirst] = useState(0); // Índice del primer elemento
     const [rows, setRows] = useState(15);   // Cantidad de filas por página
 
+    const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
     // --- Headers de Autenticación ---
     const getAuthHeaders = useCallback(() => {
         if (!token) {
@@ -75,6 +78,19 @@ function TrazabilidadPage() {
             pollerRef.current = null;
         }
     }, []);
+
+    const cancelTask = useCallback(async (taskIdToCancel) => {
+            if (!taskIdToCancel) return; // No hay nada que cancelar
+
+            console.log(`Enviando solicitud de limpieza/cancelación para la tarea: ${taskIdToCancel}`);
+            try {
+                // Esta llamada ahora limpia tareas 'running' Y 'complete'
+                await axios.post(`${API_URL}/cancel/${taskIdToCancel}`, {}, { headers: getAuthHeaders() });
+            } catch (error) {
+                // No es crítico si esto falla (ej. el servidor reinició y la tarea ya no existe)
+                console.warn(`No se pudo limpiar la tarea anterior ${taskIdToCancel}:`, error);
+            }
+        }, [getAuthHeaders]);
 
     // Limpia el sondeo si el usuario se va de la página
     useEffect(() => {
@@ -133,8 +149,13 @@ function TrazabilidadPage() {
     // 3. Al cambiar Filtros Avanzados (desde FiltroPanel)
     const handleAplicarFiltros = useCallback((nuevosFiltros) => {
         setFiltrosActivos(nuevosFiltros);
+        toast.current.show({ 
+            severity: 'success', 
+            summary: 'Filtros Aplicados', 
+            detail: 'Los filtros avanzados se usarán en la próxima consulta.' 
+        });
         // No consultamos, solo guardamos el estado
-    }, []);
+    }, [toast]);
 
     const handleLimpiarFiltros = useCallback(() => {
         setFiltrosActivos({});
@@ -143,13 +164,18 @@ function TrazabilidadPage() {
         setTotalRows(0);
         setFirst(0); // Resetear paginación
         setRows(15); // Resetear paginación
+        stopPolling(); // Detener cualquier sondeo
+        if (currentTaskId) {
+            cancelTask(currentTaskId); // Limpia la tarea anterior del backend
+            setCurrentTaskId(null); // Limpia el ID de la tarea
+        }
         toast.current.show({ severity: 'info', summary: 'Filtros Limpiados', detail: 'Se han limpiado los filtros y resultados.' });
-    }, []);
+    }, [currentTaskId, cancelTask, stopPolling]);
 
     // --- LÓGICA DE CONSULTA ASÍNCRONA (El núcleo) ---
 
     // 4. Al presionar "Consultar"
-    const handleConsultar = async () => {
+    const handleConsultar = async (bypassFilterCheck = false) => {
         if (!sufijo || !fechaDesde || !fechaHasta) {
             toast.current.show({ severity: 'warn', summary: 'Campos requeridos', detail: 'Seleccione Tipo, Fecha Desde y Fecha Hasta.' });
             return;
@@ -158,8 +184,22 @@ function TrazabilidadPage() {
             toast.current.show({ severity: 'warn', summary: 'Columnas requeridas', detail: 'Seleccione al menos una columna visible.' });
             return;
         }
+
+        if (Object.keys(filtrosActivos).length === 0 && !bypassFilterCheck) {
+            // Si no hay filtros avanzados Y no estamos saltando el chequeo,
+            // mostramos el diálogo y detenemos la ejecución.
+            setShowConfirmDialog(true);
+            return;
+        }
+        // Si llegamos aquí, ocultamos el diálogo (por si acaso)
+        setShowConfirmDialog(false);
         
         stopPolling(); // Detiene cualquier sondeo anterior
+        if (currentTaskId) {
+            // Limpia la tarea anterior ANTES de empezar la nueva
+            await cancelTask(currentTaskId); 
+            // No seteamos a null aquí, porque se seteará en el try
+        }
         setIsLoading(true);
         setResultados([]);
         setTotalRows(0);
@@ -261,8 +301,8 @@ function TrazabilidadPage() {
         stopPolling(); // Detiene el sondeo
         
         try {
-            await axios.post(`${API_URL}/cancel/${currentTaskId}`, {}, { headers: getAuthHeaders() });
-            toast.current.show({ severity: 'info', summary: 'Cancelación Solicitada', detail: 'La consulta se detendrá en breve.' });
+            await cancelTask(currentTaskId); 
+            toast.current.show({ severity: 'info', summary: 'Cancelación Solicitada', detail: 'La consulta se detendrá o limpiará.' });
         } catch (error) {
             console.error("Error al cancelar:", error);
             const detail = error.response?.data?.detail || error.message;
@@ -396,7 +436,7 @@ function TrazabilidadPage() {
                     </div>
                 </div>
             </div>
-
+            
             {/* --- 2. Acordeón ÚNICO para Filtros Avanzados (como en Visor.jsx) --- */}
             {allColumns.length > 0 && !isColLoading && (
                 <FiltroPanel
@@ -405,6 +445,7 @@ function TrazabilidadPage() {
                     onAplicarFiltros={handleAplicarFiltros}
                     onLimpiarFiltros={handleLimpiarFiltros}
                     key={`filtropanel-${sufijo}-${filtroPanelKey}`}
+                    isLoading={isLoading}
                 />
             )}
             
@@ -421,7 +462,7 @@ function TrazabilidadPage() {
                         />
                         <Button 
                             label="Consultar" 
-                            onClick={handleConsultar} 
+                            onClick={() => handleConsultar(false)} 
                             className={btnPrimary} 
                             icon="pi pi-search" 
                             disabled={allColumns.length === 0 || !fechaDesde || !fechaHasta || visibleColumns.length === 0}
@@ -500,8 +541,43 @@ function TrazabilidadPage() {
                         className="mt-4 border-t border-gray-200 pt-2"
                     />
                 )}
+                <Dialog 
+                header="Confirmar Consulta"
+                visible={showConfirmDialog}
+                style={{ width: 'min(90vw, 500px)' }} // Ancho responsivo
+                modal
+                onHide={() => setShowConfirmDialog(false)}
+                footer={
+                    <div className="flex justify-end gap-2">
+                        <Button 
+                            label="Cancelar" 
+                            icon="pi pi-times" 
+                            onClick={() => setShowConfirmDialog(false)} 
+                            className={btnSecondary} // Usamos tu estilo
+                        />
+                        <Button 
+                            label="Consultar" 
+                            icon="pi pi-check" 
+                            onClick={() => handleConsultar(true)} // Llama con 'true'
+                            autoFocus 
+                            className={btnPrimary} // Usamos tu estilo
+                        />
+                    </div>
+                    }
+                >
+                    <div className="flex items-center gap-4 pt-3">
+                        <i className="pi pi-exclamation-triangle" style={{ fontSize: '2.5rem', color: 'var(--orange-500)' }}></i>
+                        <div>
+                            <p className="font-bold text-lg">Sin Filtros Avanzados</p>
+                            <p className="text-gray-600">
+                                La consulta tiende a demorar en dar resultados, ¿desea seguir sin filtros avanzados?
+                            </p>
+                        </div>
+                    </div>
+                </Dialog>
             </div>
         </div>
+        
     );
 }
 

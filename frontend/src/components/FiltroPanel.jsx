@@ -5,7 +5,7 @@ import FiltroItem from './FiltroItem';
 
 import { btnPanelPrimary, btnPanelSecondary } from '../styles/appStyles';
 
-function FiltroPanel({ allColumns, initialFilters, onAplicarFiltros, onLimpiarFiltros }) {
+function FiltroPanel({ allColumns, initialFilters, onAplicarFiltros, onLimpiarFiltros, isLoading }) {
   
   // Mantenemos un "borrador" de los filtros aquí - SOLO se inicializa una vez
   const [filtrosBorrador, setFiltrosBorrador] = useState(initialFilters || {});
@@ -63,7 +63,15 @@ function FiltroPanel({ allColumns, initialFilters, onAplicarFiltros, onLimpiarFi
       onToggle={(e) => setIsOpen(e.currentTarget.open)}
       className="w-full border border-gray-300 rounded-lg mb-4"
     >
-      <summary className="p-4 cursor-pointer font-bold">
+      <summary 
+          className={`p-4 cursor-pointer font-bold ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          // 2. Previene que se abra/cierre el panel si está cargando
+          onClick={(e) => {
+            if (isLoading) {
+              e.preventDefault();
+            }
+          }}
+        >
         Filtros Avanzados
         {numFiltrosActivos > 0 && (
           <span className="ml-2 text-sm font-normal text-blue-600">
@@ -71,7 +79,7 @@ function FiltroPanel({ allColumns, initialFilters, onAplicarFiltros, onLimpiarFi
           </span>
         )}
       </summary>
-
+      <fieldset disabled={isLoading}>
       <div className="p-4 border-t border-gray-300">
         <div className="flex flex-wrap gap-4 max-h-[300px] overflow-y-auto pb-4">
           {columnasParaMostrar.map(colName => {
@@ -96,7 +104,8 @@ function FiltroPanel({ allColumns, initialFilters, onAplicarFiltros, onLimpiarFi
             Aplicar Filtros
           </button>
         </div>
-      </div>
+      </div>       
+       </fieldset>
     </details>
   );
 }
