@@ -182,9 +182,9 @@ function ListaNegra() {
         <>
             {/* --- Barra de Acciones (Estilo Visor) --- */}
             <div className="bg-white shadow rounded-lg p-4 mb-4 flex flex-col md:flex-row justify-between items-center gap-4"> 
-                <h2 className="text-2xl font-semibold text-gray-900 m-0">
+                {/* <h2 className="text-2xl font-semibold text-gray-900 m-0"> */}
                     {/* Consulta de Lista Negra */}
-                </h2> 
+                {/* </h2>  */}
                 <div className="flex flex-shrink-0 flex-wrap items-center gap-5"> 
                     <button
                         onClick={() => handleExport('excel')} 
