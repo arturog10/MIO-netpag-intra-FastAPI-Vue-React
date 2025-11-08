@@ -43,8 +43,8 @@ class ExportRequest(BaseModel):
     formato: str # "excel" o "csv"
 
 class TokenData(BaseModel):
-    email: str | None = None
-    rol: str | None = None    
+    email: Optional[str] = None
+    rol: Optional[str] = None    
 
 class UserCreate(BaseModel):
     nombre_completo: str
@@ -65,7 +65,7 @@ class ListaNegraDataRequest(BaseModel):
     """
     Solicitud de datos para la grilla de Lista Negra.
     """
-    filtros: Dict[str, Any] | None = None
+    filtros: Optional[Dict[str, Any]] = None
     page: int = 1
     items_per_page: int = 15
     sort_field: Optional[str] = None
@@ -83,7 +83,7 @@ class ListaNegraExportRequest(BaseModel):
     """
     Solicitud de exportación de Lista Negra.
     """
-    filtros: Dict[str, Any] | None = None
+    filtros: Optional[Dict[str, Any]] = None
     formato: str = "excel"
     visible_columns: List[str]
     sort_field: Optional[str] = None

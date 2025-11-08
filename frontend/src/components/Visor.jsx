@@ -15,7 +15,7 @@ import FiltroPanel from './FiltroPanel';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
 
-const API_URL = 'http://localhost:8000/api/visor';
+const API_URL = 'http://localhost:8001/api/visor';
 
 // --- Clases de Tailwind y consts ---
 import { 
