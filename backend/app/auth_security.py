@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from app.config import config
 from app.models import TokenData 
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ def get_password_hash(password: str) -> str:
 
 # --- Funciones de Token JWT ---
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Crea un nuevo token JWT."""
     to_encode = data.copy()
     if expires_delta:
