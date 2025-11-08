@@ -1,6 +1,7 @@
 import logging
 import json
 from datetime import datetime
+from typing import Optional
 from sqlalchemy import (
     text, select, func, cast, String, column, Table,
     MetaData, insert, update, delete, Numeric, Date, and_
@@ -110,7 +111,7 @@ def _create_robust_date_conversion(col_name: str):
 
 # --- LÓGICA DE FILTROS (MEJORADA) ---
 
-def construir_where_dinamico(filtros: dict | None = None, tabla: Table | None = None) -> tuple[list, dict]:
+def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Table] = None) -> tuple[list, dict]:
     """
     Construye la cláusula WHERE usando objetos de SQLAlchemy (¡PORTABLE!)
     y prepara los parámetros.
@@ -259,7 +260,7 @@ def construir_where_dinamico(filtros: dict | None = None, tabla: Table | None = 
 
 # --- OPERACIONES DE DATOS ---
 
-def contar_datos_cliente(db_session, client_code: str, filtros: dict | None = None) -> int:
+def contar_datos_cliente(db_session, client_code: str, filtros: Optional[dict] = None) -> int:
     try:
         tabla = _get_reflected_table("cliente_table_map", client_code)
         sql_filters, params = construir_where_dinamico(filtros)
@@ -275,7 +276,7 @@ def contar_datos_cliente(db_session, client_code: str, filtros: dict | None = No
         logger.error(f"Error al CONTAR datos para '{client_code}': {e}", exc_info=True)
         raise e
 
-def obtener_datos_cliente(db_session, client_code: str, filtros: dict | None = None, page: int = 1, items_per_page: int = 15, sort_field: str | None = None, sort_order: int | None = None):
+def obtener_datos_cliente(db_session, client_code: str, filtros: Optional[dict] = None, page: int = 1, items_per_page: int = 15, sort_field: Optional[str] = None, sort_order: Optional[int] = None):
     try:
         tabla = _get_reflected_table("cliente_table_map", client_code)
         sql_filters, params = construir_where_dinamico(filtros)
@@ -318,7 +319,7 @@ def obtener_datos_cliente(db_session, client_code: str, filtros: dict | None = N
         logger.error(f"Error al OBTENER datos para '{client_code}': {e}", exc_info=True)
         raise e
 
-def obtener_todos_los_datos_filtrados(db_session, client_code: str, filtros: dict | None = None):
+def obtener_todos_los_datos_filtrados(db_session, client_code: str, filtros: Optional[dict] = None):
     try:
         tabla = _get_reflected_table("cliente_table_map", client_code)
         sql_filters, params = construir_where_dinamico(filtros)
@@ -358,7 +359,7 @@ def estrategia_existe_db(db_session, nombre: str, cliente: str) -> bool:
         logger.error(f"Error al CHEQUEAR estrategia '{nombre}': {e}", exc_info=True)
         raise e
 
-def guardar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, filtro_columnas: str, filtros_aplicados: str, orden_estado: str | None = None) -> bool:
+def guardar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, filtro_columnas: str, filtros_aplicados: str, orden_estado: Optional[str] = None) -> bool:
     try:
         tabla = _get_reflected_table("tabla_estrategias")
         stmt = insert(tabla).values(
@@ -374,7 +375,7 @@ def guardar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, 
         logger.error(f"Error al GUARDAR la estrategia '{nombre}': {e}", exc_info=True)
         raise e
 
-def actualizar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, filtro_columnas: str, filtros_aplicados: str, orden_estado: str | None = None) -> bool:
+def actualizar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, filtro_columnas: str, filtros_aplicados: str, orden_estado: Optional[str] = None) -> bool:
     try:
         tabla = _get_reflected_table("tabla_estrategias")
         stmt = update(tabla).where(
@@ -454,7 +455,7 @@ def contar_datos_listanegra(db_session, filtros: dict | None = None) -> int:
         logger.error(f"Error al CONTAR datos de lista_negra: {e}", exc_info=True)
         raise e
 
-def obtener_datos_listanegra(db_session, filtros: dict | None = None, page: int = 1, items_per_page: int = 15, sort_field: str | None = None, sort_order: int | None = None):
+def obtener_datos_listanegra(db_session, filtros: Optional[dict] = None, page: int = 1, items_per_page: int = 15, sort_field: Optional[str] = None, sort_order: Optional[int] = None):
     """
     Obtiene los datos paginados y ordenados de Lista Negra.
     (Versión mejorada)
@@ -499,7 +500,7 @@ def obtener_datos_listanegra(db_session, filtros: dict | None = None, page: int 
         logger.error(f"Error al OBTENER datos de lista_negra: {e}", exc_info=True)
         raise e
 
-def obtener_todos_los_datos_listanegra(db_session, filtros: dict | None = None, sort_field: str | None = None, sort_order: int | None = None) -> tuple[list[str], list[dict]]:
+def obtener_todos_los_datos_listanegra(db_session, filtros: Optional[dict] = None, sort_field: Optional[str]= None, sort_order: Optional[int] = None) -> tuple[list[str], list[dict]]:
     """
     Obtiene TODOS los datos filtrados de Lista Negra para exportar.
     (Versión mejorada)

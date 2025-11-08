@@ -5,6 +5,8 @@ from sqlalchemy.engine import Connection # Importamos Connection
 from app.config import config
 from app.db_operations import _get_reflected_table # Reutilizamos la función auxiliar
 from app.auth_security import get_password_hash, verify_password # Importamos los helpers de auth
+from typing import Optional
+
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +43,7 @@ def crear_usuario_db(db_session: Connection, username: str, password_plano: str,
         logger.error(f"Error al crear el usuario '{username}'. Puede que ya exista. Error: {e}")
         return False
 
-def verificar_usuario_db(db_session: Connection, email: str, password_plano: str) -> dict | None:
+def verificar_usuario_db(db_session: Connection, email: str, password_plano: str) -> Optional[dict]:
     """
     Verifica las credenciales de un usuario (por email) contra la base de datos.
     Devuelve los datos del usuario si es exitoso, o None si falla.
@@ -76,7 +78,7 @@ def verificar_usuario_db(db_session: Connection, email: str, password_plano: str
         logger.error(f"Error durante la verificación de usuario: {e}", exc_info=True)
         return None
 
-def registrar_accion_db(db_session: Connection, usuario: str | None, accion: str, detalles: dict | None = None):
+def registrar_accion_db(db_session: Connection, usuario: Optional[str], accion: str, detalles: Optional[dict] = None):
     """
     Inserta un nuevo registro en la tabla de auditoría.
     """
