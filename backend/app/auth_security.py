@@ -108,7 +108,7 @@ async def get_current_user_email(token: str = Depends(oauth2_scheme)) -> str:
         
     return email # Tu función original devuelve solo el email
 
-def decode_token(token: str) -> dict | None:
+def decode_token(token: str) -> Optional[dict]:
     """Decodifica un token y devuelve el 'payload' (datos) si es válido."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
