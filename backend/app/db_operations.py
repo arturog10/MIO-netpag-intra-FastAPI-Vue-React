@@ -410,7 +410,7 @@ def cargar_estrategias_db(db_session, client_code: str) -> list:
         logger.error(f"Error al CARGAR LISTA de estrategias para '{client_code}': {e}", exc_info=True)
         raise e
 
-def cargar_una_estrategia_db(db_session, id_estrategia: int) -> dict | None:
+def cargar_una_estrategia_db(db_session, id_estrategia: int) -> Optional[dict]:
     try:
         tabla = _get_reflected_table("tabla_estrategias")
         stmt = select(
@@ -443,7 +443,7 @@ def obtener_columnas_listanegra(db_session) -> list[str]:
         logger.error(f"No se pudo obtener la estructura de lista_negra. Error: {e}")
         raise e
 
-def contar_datos_listanegra(db_session, filtros: dict | None = None) -> int:
+def contar_datos_listanegra(db_session, filtros: Optional[dict] = None) -> int:
     try:
         tabla = _get_reflected_table("lista_negra")
         sql_filters, params = construir_where_dinamico(filtros)
