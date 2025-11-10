@@ -22,6 +22,7 @@ origins = [
     "http://localhost",
     "http://localhost:5173",  # Puerto por defecto de Vite (Vue/React)
     "http://localhost:3000",  # Puerto por defecto de create-react-app
+    "http://localhost:80",  # Puerto por defecto de create-react-app
 ]
 app.add_middleware(
     CORSMiddleware,
