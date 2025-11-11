@@ -10,6 +10,7 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { MultiSelect } from 'primereact/multiselect';
 import { Paginator } from 'primereact/paginator'; 
+import { selectClass } from '../styles/appStyles';
 
 // --- Iconos (Estilo Visor) ---
 const IconExcel = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.18 4.616a.5.5 0 0 1 .704.064L8 7.219l2.116-2.54a.5.5 0 1 1 .768.641L8.651 8l2.233 2.68a.5.5 0 0 1-.768.64L8 8.781l-2.116 2.54a.5.5 0 0 1-.768-.641L7.349 8 5.116 5.32a.5.5 0 0 1 .064-.704z"/><path d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H4zm0 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/></svg>;
@@ -35,6 +36,26 @@ function ListaNegra() {
     const [filtroPanelKey, setFiltroPanelKey] = useState(0); 
 
     // --- LÓGICA DE DATOS ---
+
+        // --- 2. Añadir estados para el dropdown (como en Visor.jsx) ---
+    const [listaNegraOptions, setListaNegraOptions] = useState([]);
+    const [selectedLista, setSelectedLista] = useState("");
+
+    // --- 3. Cargar la lista de tablas disponibles al inicio ---
+    useEffect(() => {
+        const fetchListaNegras = async () => {
+            if (!token) return;
+            try {
+                const config = { headers: { Authorization: `Bearer ${token}` } };
+                const response = await axios.get(`${API_URL}/listanegras`, config);
+                setListaNegraOptions(response.data);
+            } catch (error) {
+                console.error("Error al cargar lista de tablas:", error);
+            }
+        };
+        fetchListaNegras();
+    }, [token]);
+
     const fetchData = useCallback(async () => {
         if (!token) return; 
         setIsLoading(true); 
@@ -51,7 +72,7 @@ function ListaNegra() {
                 headers: { Authorization: `Bearer ${token}` } 
             };
             
-            const response = await axios.post(`${API_URL}/data`, body, config); 
+            const response = await axios.post(`${API_URL}/data/${selectedLista}`, body, config); // <-- 5. Usar selectedLista 
             const data = response.data; 
             
             setRows(data.rows); 
@@ -63,7 +84,7 @@ function ListaNegra() {
         } finally {
             setIsLoading(false); 
         }
-    }, [first, itemsPerPage, filtrosActivos, sortConfig, token]); 
+    }, [first, itemsPerPage, filtrosActivos, sortConfig, token, selectedLista]); // <-- 6. Añadir dependencia 
 
     useEffect(() => {
         if (allColumnNames.length > 0 && visibleColumns.length === 0) { 
@@ -74,9 +95,20 @@ function ListaNegra() {
     }, [allColumnNames]); 
 
     useEffect(() => {
-        fetchData(); 
-    }, [fetchData]); 
-
+        if (selectedLista) { // Solo corre si hay una lista seleccionada
+                fetchData();
+            }
+    }, [fetchData, selectedLista]); // 'selectedLista' reemplaza a 'fetchData' como disparador principal
+ 
+    // --- 8. Añadir manejador para el cambio del dropdown (como en Visor.jsx) ---
+    const handleListaChange = (e) => {
+        const newLista = e.target.value;
+        setSelectedLista(newLista);
+        // Resetear todo al cambiar de lista
+        setRows([]); setTotalRows(0); setAllColumnNames([]); setVisibleColumns([]);
+        setFiltrosActivos({}); setFirst(0); setSortConfig({ field: null, order: 1 });
+        setFiltroPanelKey(prev => prev  +1);
+    };
     // --- MANEJADORES DE DATATABLE ---
     const onPage = (e) => {
         setFirst(e.first); 
@@ -119,7 +151,7 @@ function ListaNegra() {
     };
     
     const handleExport = async (formato) => {
-        if (!token) return; 
+        if (!token || !selectedLista) return; // <-- 9. Bloquear si no hay lista 
         setIsLoading(true); 
         try {
             const body = {
@@ -133,7 +165,7 @@ function ListaNegra() {
                 headers: { Authorization: `Bearer ${token}` }, 
                 responseType: 'blob'  
             };
-            const response = await axios.post(`${API_URL}/export`, body, config); 
+            const response = await axios.post(`${API_URL}/export/${selectedLista}`, body, config); // <-- 10. Usar selectedLista 
             // ... (lógica de descarga sin cambios) ...
             const blob = new Blob([response.data], { type: response.headers['content-type'] }); 
             const url = window.URL.createObjectURL(blob); 
@@ -187,9 +219,14 @@ function ListaNegra() {
                     {/* Consulta de Lista Negra */}
                 {/* </h2>  */}
                 <div className="flex flex-shrink-0 flex-wrap items-center gap-5"> 
+                    {/* --- 11. Añadir el dropdown (como en Visor.jsx) --- */}
+                    <select onChange={handleListaChange} value={selectedLista} className={selectClass}>
+                        <option value="">Selecciona una lista...</option>
+                        {listaNegraOptions.map(lista => (<option key={lista} value={lista}>{lista}</option>))}
+                    </select>
                     <button
                         onClick={() => handleExport('excel')} 
-                        disabled={isLoading} 
+                        disabled={isLoading || !selectedLista} // <-- 12. Deshabilitar
                         className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-400"
                     >
                         <IconExcel />
@@ -197,7 +234,7 @@ function ListaNegra() {
                     </button> 
                     <button
                         onClick={() => handleExport('csv')} 
-                        disabled={isLoading} 
+                        disabled={isLoading || !selectedLista} // <-- 12. Deshabilitar 
                         className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 disabled:text-gray-400"
                     >
                         <IconCsv />
@@ -213,7 +250,7 @@ function ListaNegra() {
                         maxSelectedLabels={0} 
                         selectedItemsLabel={`${visibleColumns.length} columnas`} 
                         className="w-full md:w-20rem text-sm" 
-                        disabled={allColumnNames.length === 0} 
+                        disabled={allColumnNames.length === 0 || !selectedLista} // <-- 12. Deshabilitar
                         filter 
                     />
                 </div>
