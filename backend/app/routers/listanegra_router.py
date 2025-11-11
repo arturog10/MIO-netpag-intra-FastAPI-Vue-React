@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends, Body
 from sqlalchemy.engine import Connection
 from typing import List, Annotated
 from fastapi.responses import StreamingResponse
+from app.config import config
 
 # Importaciones de tus archivos
 from app.models import (
@@ -34,22 +35,37 @@ B2CDBSession = Annotated[Connection, Depends(get_b2c_db)]
 CurrentUserEmail = Annotated[str, Depends(get_current_user_email)] 
 
 
-@router.get("/columns", response_model=List[str])
-def get_listanegra_columns(db: B2CDBSession):
+@router.get("/listanegras", response_model=List[str]) # <-- NUEVO ENDPOINT
+def get_listanegra_list():
+    """
+    Obtiene la lista de tablas de lista negra disponibles
+    desde config.json (similar a /api/visor/clients).
+    """
+    try:
+        json_map = config["json_config"].get("listanegra_table_map", {})
+        return list(json_map.keys())
+    except Exception as e:
+        logger.error(f"Error al cargar 'listanegra_table_map' del config: {e}")
+        return []
+
+
+@router.get("/columns/{listanegra_key}", response_model=List[str])
+def get_listanegra_columns(listanegra_key: str, db: B2CDBSession):
     """
     Obtiene la lista de todas las columnas de Lista Negra
     para poblar los filtros en el frontend.
     """
     try:
         logger.info("Obteniendo columnas de Lista Negra") 
-        return db_ops.obtener_columnas_listanegra(db) 
+        return db_ops.obtener_columnas_listanegra(db, listanegra_key) 
     except Exception as e:
         logger.error(f"Error al obtener columnas de Lista Negra: {e}", exc_info=True) 
         raise HTTPException(status_code=500, detail="Error al obtener columnas.")
 
 
-@router.post("/data", response_model=ListaNegraDataResponse)
+@router.post("/data/{listanegra_key}", response_model=ListaNegraDataResponse)
 def get_listanegra_data(
+    listanegra_key: str,
     req: ListaNegraDataRequest,
     db: B2CDBSession,
     current_user_email: CurrentUserEmail
@@ -70,12 +86,13 @@ def get_listanegra_data(
 
         # 1. Contar el total
         total_rows = db_ops.contar_datos_listanegra( 
-            db, filtros=req.filtros
+            db, listanegra_key=listanegra_key, filtros=req.filtros
         )
         
         # 2. Obtener los datos de la página
         cols, rows = db_ops.obtener_datos_listanegra( 
-            db, 
+            db,
+            listanegra_key=listanegra_key, 
             filtros=req.filtros, 
             page=req.page, 
             items_per_page=req.items_per_page,
@@ -95,8 +112,9 @@ def get_listanegra_data(
         logger.error(f"Error al obtener datos de Lista Negra: {e}", exc_info=True) 
         raise HTTPException(status_code=500, detail="Error interno al procesar datos.")
 
-@router.post("/export")
+@router.post("/export/{listanegra_key}")
 async def export_listanegra_data(
+    listanegra_key: str,
     req: ListaNegraExportRequest,
     db: B2CDBSession,
     current_user_email: CurrentUserEmail
@@ -112,6 +130,7 @@ async def export_listanegra_data(
         logger.info(f"Iniciando exportación de Lista Negra...") 
         cols, all_data = db_ops.obtener_todos_los_datos_listanegra( 
             db, 
+            listanegra_key=listanegra_key,
             filtros=req.filtros,
             sort_field=req.sort_field,
             sort_order=req.sort_order

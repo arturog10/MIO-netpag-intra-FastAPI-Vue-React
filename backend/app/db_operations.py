@@ -431,21 +431,21 @@ def cargar_una_estrategia_db(db_session, id_estrategia: int) -> Optional[dict]:
 
 # --- LISTA NEGRA ---
 
-def obtener_columnas_listanegra(db_session) -> list[str]:
+def obtener_columnas_listanegra(db_session, listanegra_key: str) -> list[str]:
     """
     Obtiene solo los nombres de las columnas de lista negra.
     Útil para poblar los filtros en el frontend.
     """
     try:
-        tabla = _get_reflected_table("lista_negra")
+        tabla = _get_reflected_table("listanegra_table_map", listanegra_key)
         return [c.name for c in tabla.columns]
     except Exception as e:
         logger.error(f"No se pudo obtener la estructura de lista_negra. Error: {e}")
         raise e
 
-def contar_datos_listanegra(db_session, filtros: Optional[dict] = None) -> int:
+def contar_datos_listanegra(db_session, listanegra_key: str, filtros: Optional[dict] = None) -> int:
     try:
-        tabla = _get_reflected_table("lista_negra")
+        tabla = _get_reflected_table("listanegra_table_map", listanegra_key)
         sql_filters, params = construir_where_dinamico(filtros)
         stmt = select(func.count()).select_from(tabla)
         if sql_filters: stmt = stmt.where(and_(*sql_filters))
@@ -455,13 +455,13 @@ def contar_datos_listanegra(db_session, filtros: Optional[dict] = None) -> int:
         logger.error(f"Error al CONTAR datos de lista_negra: {e}", exc_info=True)
         raise e
 
-def obtener_datos_listanegra(db_session, filtros: Optional[dict] = None, page: int = 1, items_per_page: int = 15, sort_field: Optional[str] = None, sort_order: Optional[int] = None):
+def obtener_datos_listanegra(db_session, listanegra_key: str, filtros: Optional[dict] = None, page: int = 1, items_per_page: int = 15, sort_field: Optional[str] = None, sort_order: Optional[int] = None):
     """
     Obtiene los datos paginados y ordenados de Lista Negra.
     (Versión mejorada)
     """
     try:
-        tabla = _get_reflected_table("lista_negra")
+        tabla = _get_reflected_table("listanegra_table_map", listanegra_key)
         sql_filters, params = construir_where_dinamico(filtros)
 
         stmt = select(tabla)
@@ -500,13 +500,13 @@ def obtener_datos_listanegra(db_session, filtros: Optional[dict] = None, page: i
         logger.error(f"Error al OBTENER datos de lista_negra: {e}", exc_info=True)
         raise e
 
-def obtener_todos_los_datos_listanegra(db_session, filtros: Optional[dict] = None, sort_field: Optional[str]= None, sort_order: Optional[int] = None) -> tuple[list[str], list[dict]]:
+def obtener_todos_los_datos_listanegra(db_session, listanegra_key: str, filtros: Optional[dict] = None, sort_field: Optional[str]= None, sort_order: Optional[int] = None) -> tuple[list[str], list[dict]]:
     """
     Obtiene TODOS los datos filtrados de Lista Negra para exportar.
     (Versión mejorada)
     """
     try:
-        tabla = _get_reflected_table("lista_negra")
+        tabla = _get_reflected_table("listanegra_table_map", listanegra_key)
         sql_filters, params = construir_where_dinamico(filtros)
 
         stmt = select(tabla)

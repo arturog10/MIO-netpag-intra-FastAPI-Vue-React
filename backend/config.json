@@ -22,7 +22,18 @@
     "table": "Estrategias"
   },
 
-  "lista_negra": { "db_key": "b2c", "schema": "dbo", "table": "lista_negra" },
+  "listanegra_table_map": {
+    "Lista Negra Principal": {
+      "db_key": "b2c",
+      "schema": "dbo",
+      "table": "lista_negra"
+    },
+    "Lista Negra Secundaria": {
+      "db_key": "b2c",
+      "schema": "dbo",
+      "table": "tbl_listas"
+    }
+  },
 
   "tabla_usuarios": { "db_key": "b2c", "schema": "dbo", "table": "Usuarios" },
 
