@@ -4,7 +4,9 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode'; // Asegúrate de tenerlo instalado (npm install jwt-decode)
 
-const API_URL = 'http://localhost:8000'; // URL base de tu API
+// URL DE DESARROLLO http://localhost:8001
+
+const API_URL = ''; // URL base de tu API
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {

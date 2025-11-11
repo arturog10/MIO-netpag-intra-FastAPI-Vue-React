@@ -20,7 +20,9 @@ import { Dialog } from 'primereact/dialog';
 // --- Estilos Globales (Asume que este archivo existe) ---
 import { btnPrimary, btnSecondary, btnDanger, selectClass, calendarInputClass } from '../styles/appStyles';
 
-const API_URL = 'http://localhost:8001/api/trazabilidad';
+// URL DESARROLLO: http://localhost:8001/api/trazabilidad
+
+const API_URL = '/api/trazabilidad';
 
 const sufijoOptions = [
     { label: 'Masividades', value: 'MASI' },

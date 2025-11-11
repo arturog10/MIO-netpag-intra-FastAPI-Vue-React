@@ -20,8 +20,10 @@ import { InputSwitch } from 'primereact/inputswitch';
 import { TabView, TabPanel } from 'primereact/tabview';
 import { Toast } from 'primereact/toast';
 
+// URL DESARROLLO: http://localhost:8001/api/admin
+
 // URL de la API de Admin
-const API_URL = 'http://localhost:8001/api/admin';
+const API_URL = '/api/admin';
 
 // Opciones de Roles
 const rolesOptions = [
