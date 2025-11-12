@@ -165,6 +165,7 @@ def save_strategy(
     audit_db: AuditDBSession,
     current_user_email: CurrentUserEmail
 ):
+    id_usuario = db_users.get_user_id_by_email(audit_db, current_user_email)
     """Guarda una NUEVA estrategia. Falla si ya existe."""
     with _get_strategy_connection() as connection:
         with connection.begin():
@@ -180,7 +181,9 @@ def save_strategy(
                     columnas=req.columnas_visibles,
                     filtro_columnas=req.filtro_columnas,
                     filtros_aplicados=req.filtros_aplicados,
-                    orden_estado=req.orden_estado
+                    orden_estado=req.orden_estado,
+                    id_usuario_creador=id_usuario,       
+                    usuario_creador=current_user_email
                 )
                 if not success:
                     raise HTTPException(status_code=500, detail="No se pudo guardar la estrategia.")
@@ -215,6 +218,7 @@ def overwrite_strategy(
     audit_db: AuditDBSession,
     current_user_email: CurrentUserEmail
 ):
+    id_usuario = db_users.get_user_id_by_email(audit_db, current_user_email)
     """Actualiza (sobrescribe) una estrategia existente."""
     with _get_strategy_connection() as connection:
         with connection.begin():
@@ -226,7 +230,9 @@ def overwrite_strategy(
                     columnas=req.columnas_visibles,
                     filtro_columnas=req.filtro_columnas,
                     filtros_aplicados=req.filtros_aplicados,
-                    orden_estado=req.orden_estado
+                    orden_estado=req.orden_estado,
+                    id_usuario_creador=id_usuario,
+                    usuario_creador=current_user_email                    
                 )
                 if not success:
                     raise HTTPException(status_code=404, detail="No se encontró la estrategia para actualizar.")

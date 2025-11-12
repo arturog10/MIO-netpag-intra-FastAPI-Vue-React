@@ -55,7 +55,16 @@ def get_db_session(db_key: str):
         if transaction and transaction.is_active:
             transaction.commit()
             logger.debug(f"Sesión de DB 'commit' para '{db_key}'")
-                
+    
+    except HTTPException as e_http:
+            # Si el error ya es un HTTPException (como nuestro 409),
+            # hacemos rollback pero VOLVEMOS A LANZAR EL ERROR ORIGINAL (409).
+            if transaction and transaction.is_active:
+                transaction.rollback()
+                logger.warning(f"Sesión de DB 'rollback' para '{db_key}' debido a HTTPException: {e_http.detail}")
+            # Re-lanzamos el 409 (o el error HTTP que sea)
+            raise e_http
+                    
     except Exception as e:
         # Si algo falló, hacer rollback
         if transaction and transaction.is_active:

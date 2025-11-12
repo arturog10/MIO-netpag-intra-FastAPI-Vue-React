@@ -177,3 +177,17 @@ def get_all_users_db(db_session: Connection) -> list[dict]:
     except Exception as e:
         logger.error(f"Error al obtener la lista de usuarios: {e}", exc_info=True)
         return []
+    
+def get_user_id_by_email(db_session: Connection, email: str) -> Optional[int]:
+    """Obtiene el ID numérico de un usuario a partir de su email."""
+    try:
+        tabla = _get_reflected_table("tabla_usuarios")
+        stmt = select(tabla.c.id_usuario).where(tabla.c.email == email)
+        result = db_session.execute(stmt).scalar_one_or_none()
+        if not result:
+            logger.warning(f"No se pudo encontrar el ID de usuario para el email: {email}")
+            return None
+        return int(result)
+    except Exception as e:
+        logger.error(f"Error al obtener ID de usuario por email: {e}", exc_info=True)
+        return None

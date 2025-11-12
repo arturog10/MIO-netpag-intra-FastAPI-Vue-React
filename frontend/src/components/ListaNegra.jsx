@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react'; // 1. IMPORTAR useRef
+
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext.jsx'; 
 
@@ -10,7 +11,16 @@ import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
 import { MultiSelect } from 'primereact/multiselect';
 import { Paginator } from 'primereact/paginator'; 
-import { selectClass } from '../styles/appStyles';
+// 2. IMPORTAR COMPONENTES Y ESTILOS
+import { InputText } from 'primereact/inputtext';
+import { Button } from 'primereact/button';
+import { Dialog } from 'primereact/dialog';
+import { 
+  selectClass, 
+  btnPrimary, 
+  btnSecondary, 
+  btnDanger 
+    } from '../styles/appStyles';
 
 // --- Iconos (Estilo Visor) ---
 const IconExcel = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M5.18 4.616a.5.5 0 0 1 .704.064L8 7.219l2.116-2.54a.5.5 0 1 1 .768.641L8.651 8l2.233 2.68a.5.5 0 0 1-.768.64L8 8.781l-2.116 2.54a.5.5 0 0 1-.768-.641L7.349 8 5.116 5.32a.5.5 0 0 1 .064-.704z"/><path d="M4 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H4zm0 1h8a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z"/></svg>;
@@ -37,11 +47,21 @@ function ListaNegra() {
 
     // --- LÓGICA DE DATOS ---
 
+    // --- 3. AÑADIR ESTADOS DE CONSULTAS (copiado de Visor.jsx) ---
+    const [consultasGuardadas, setConsultasGuardadas] = useState([]);
+    const [mostrarDialogoGuardar, setMostrarDialogoGuardar] = useState(false);
+    const [showOverwriteDialog, setShowOverwriteDialog] = useState(false);
+    const [nuevoNombreConsulta, setNuevoNombreConsulta] = useState("");
+    const [selectedConsultaId, setSelectedConsultaId] = useState("");
+
+    // --- Flag para controlar cuándo se carga una consulta ---
+    const [loadingConsulta, setLoadingConsulta] = useState(false);    
+
         // --- 2. Añadir estados para el dropdown (como en Visor.jsx) ---
     const [listaNegraOptions, setListaNegraOptions] = useState([]);
     const [selectedLista, setSelectedLista] = useState("");
 
-    // --- 3. Cargar la lista de tablas disponibles al inicio ---
+    // ---  Cargar la lista de tablas disponibles al inicio ---
     useEffect(() => {
         const fetchListaNegras = async () => {
             if (!token) return;
@@ -56,8 +76,21 @@ function ListaNegra() {
         fetchListaNegras();
     }, [token]);
 
+    // --- 4. AÑADIR FUNCIÓN PARA CARGAR CONSULTAS GUARDADAS ---
+    const fetchConsultas = useCallback(async () => {
+        if (!selectedLista) return;
+        try {
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+            const response = await axios.get(`${API_URL}/consultas/${selectedLista}`, config);
+            setConsultasGuardadas(response.data);
+        } catch (error) { 
+            console.error("Error al cargar consultas guardadas:", error); 
+            setConsultasGuardadas([]); // Limpia en caso de error
+        }  
+    }, [selectedLista, token]);    
+
     const fetchData = useCallback(async () => {
-        if (!token) return; 
+        if (!token || !selectedLista) return; // <-- No hacer fetch si no hay lista seleccionada
         setIsLoading(true); 
         const currentPage = Math.floor(first / itemsPerPage) + 1; 
         try {
@@ -96,9 +129,12 @@ function ListaNegra() {
 
     useEffect(() => {
         if (selectedLista) { // Solo corre si hay una lista seleccionada
+            if (!loadingConsulta) { // <-- 5. AÑADIR CHECK
                 fetchData();
             }
-    }, [fetchData, selectedLista]); // 'selectedLista' reemplaza a 'fetchData' como disparador principal
+            fetchConsultas(); // <-- 6. Cargar consultas guardadas al cambiar de lista
+         }
+    }, [fetchData, selectedLista, loadingConsulta, fetchConsultas]); // <-- 7. AÑADIR DEPENDENCIAS // 'selectedLista' reemplaza a 'fetchData' como disparador principal
  
     // --- 8. Añadir manejador para el cambio del dropdown (como en Visor.jsx) ---
     const handleListaChange = (e) => {
@@ -107,6 +143,8 @@ function ListaNegra() {
         // Resetear todo al cambiar de lista
         setRows([]); setTotalRows(0); setAllColumnNames([]); setVisibleColumns([]);
         setFiltrosActivos({}); setFirst(0); setSortConfig({ field: null, order: 1 });
+        setConsultasGuardadas([]); // <-- Limpiar consultas
+        setSelectedConsultaId(""); // <-- Limpiar consulta seleccionada
         setFiltroPanelKey(prev => prev  +1);
     };
     // --- MANEJADORES DE DATATABLE ---
@@ -120,6 +158,7 @@ function ListaNegra() {
             field: e.sortField, 
             order: e.sortOrder 
         });
+        setSelectedConsultaId(""); // <-- Resetear
     };
 
     // --- 👈 1. AÑADIR HANDLER PARA REORDENAR (Igual que Visor.jsx) ---
@@ -135,6 +174,7 @@ function ListaNegra() {
                 .filter(col => col !== null);
             
             setVisibleColumns(newOrderedVisibleColumns);
+            setSelectedConsultaId(""); // <-- Resetear
         }
     };
     
@@ -142,11 +182,13 @@ function ListaNegra() {
     const handleAplicarFiltros = (nuevosFiltros) => {
         setFiltrosActivos(nuevosFiltros); 
         setFirst(0); 
+        setSelectedConsultaId(""); // <-- Resetear
     };
 
     const handleLimpiarFiltros = () => {
         setFiltrosActivos({}); 
         setFirst(0); 
+        setSelectedConsultaId(""); // <-- Resetear
         setFiltroPanelKey(prev => prev + 1); 
     };
     
@@ -193,7 +235,126 @@ function ListaNegra() {
     
     const onColumnToggle = (e) => {
         setVisibleColumns(e.value); 
+        setSelectedConsultaId(""); // <-- Resetear
     };
+
+    // --- 9. AÑADIR LÓGICA DE GUARDAR/CARGAR (copiado de Visor.jsx) ---
+
+    const getGridState = () => {
+        return {
+            columnas_visibles: JSON.stringify(visibleColumns),
+            filtros_aplicados: JSON.stringify(filtrosActivos),
+            orden_estado: JSON.stringify(sortConfig)
+        };
+    };
+
+    const handleSaveConsulta = async () => {
+        if (!nuevoNombreConsulta.trim()) { alert("Introduce un nombre."); return; }
+        const { columnas_visibles, filtros_aplicados, orden_estado } = getGridState();
+        const requestBody = {
+            nombre_estrategia: nuevoNombreConsulta, // El modelo Pydantic espera este nombre
+            columnas_visibles,
+            filtro_columnas: "", // Este campo no se usa pero el modelo lo tiene
+            filtros_aplicados,
+            orden_estado
+        };
+        try {
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+            await axios.post(`${API_URL}/consultas/${selectedLista}`, requestBody, config);
+            alert("Consulta guardada."); 
+            setMostrarDialogoGuardar(false); 
+            setNuevoNombreConsulta("");
+            fetchConsultas(); // Recargar la lista
+        } catch (error) {
+            if (error.response?.status === 409) {
+                alert(error.response.data.detail || "Ya existe una consulta con ese nombre.");
+                setMostrarDialogoGuardar(false); 
+                // setShowOverwriteDialog(true); 
+            } else { 
+                console.error("Error al guardar:", error); 
+                alert("Error al guardar la consulta."); 
+            }
+        }
+    };
+
+    const handleOverwriteConsulta = async () => {
+        const { columnas_visibles, filtros_aplicados, orden_estado } = getGridState();
+        const requestBody = {
+            nombre_estrategia: nuevoNombreConsulta,
+            columnas_visibles,
+            filtro_columnas: "",
+            filtros_aplicados,
+            orden_estado
+        };
+        try {
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+            await axios.put(`${API_URL}/consultas/${selectedLista}`, requestBody, config);
+            alert("Consulta actualizada."); 
+            setShowOverwriteDialog(false); 
+            setNuevoNombreConsulta("");
+            fetchConsultas(); // Recargar la lista
+        } catch (error) { 
+            console.error("Error al sobrescribir:", error); 
+            alert("Error al actualizar la consulta."); 
+        }
+    };
+
+    const handleLoadConsulta = async (event) => {
+        const consultaId = event.target.value;
+        if (!consultaId) return;
+        
+        setSelectedConsultaId(consultaId);
+        console.log(`Cargando consulta con ID: ${consultaId}`);
+        
+        setLoadingConsulta(true);
+        setIsLoading(true); // Activa el spinner principal
+
+        let loadedVisibleColumns = [];
+        let loadedFilters = {};
+        let loadedSortState = { field: null, order: 1 }; // Default
+
+        try {
+            const config = { headers: { Authorization: `Bearer ${token}` } };
+            // 1. Obtiene la configuración de la consulta
+            const response = await axios.get(`${API_URL}/consultas/load/${consultaId}`, config);
+            const consultaData = response.data;
+
+            // Parsear JSON (igual que en Visor)
+            try { loadedVisibleColumns = JSON.parse(consultaData.columnas_visibles || "[]"); } catch (e) { console.error("Error parseando columnas"); }
+            try { loadedFilters = JSON.parse(consultaData.filtros_aplicados || "{}"); } catch (e) { console.error("Error parseando filtros"); }
+            try { if (consultaData.orden_estado) { loadedSortState = JSON.parse(consultaData.orden_estado); } } catch (e) { console.error("Error parseando orden"); }
+
+            // 2. Llama a fetchData MANUALMENTE con los NUEVOS filtros y orden
+            const body = {
+                filtros: loadedFilters,
+                page: 1, // Siempre resetea a página 1
+                items_per_page: itemsPerPage,
+                sort_field: loadedSortState.field,
+                sort_order: loadedSortState.order
+            };
+
+            const dataResponse = await axios.post(`${API_URL}/data/${selectedLista}`, body, config);
+            const { all_columns, rows: dataRows, total_rows } = dataResponse.data;
+
+            // 3. Actualiza TODO el estado
+            setAllColumnNames(all_columns);
+            setRows(dataRows);
+            setTotalRows(total_rows);
+            setVisibleColumns(loadedVisibleColumns.filter(col => all_columns.includes(col.field)));
+            setFiltrosActivos(loadedFilters);
+            setSortConfig(loadedSortState);
+            setFirst(0); // Resetea paginador
+            setFiltroPanelKey(prev => prev + 1); // Forzar re-render del panel
+
+        } catch (error) {
+            console.error("Error al cargar la consulta:", error);
+            alert("Error: No se pudo cargar la configuración de la consulta.");
+            setSelectedConsultaId("");
+        } finally {
+            setIsLoading(false);
+            setTimeout(() => setLoadingConsulta(false), 0);
+        }
+    };    
 
     const columnOptions = allColumnNames.map(name => ({ 
         field: name, 
@@ -224,6 +385,25 @@ function ListaNegra() {
                         <option value="">Selecciona una lista...</option>
                         {listaNegraOptions.map(lista => (<option key={lista} value={lista}>{lista}</option>))}
                     </select>
+
+                        {/* --- 10. AÑADIR DROPDOWN DE CONSULTAS (copiado de Visor.jsx) --- */}
+                        <select
+                            className={selectClass}
+                            disabled={!selectedLista || consultasGuardadas.length === 0}
+                            onChange={handleLoadConsulta}
+                            value={selectedConsultaId}
+                        >
+                            <option value="">Cargar consulta...</option>
+                            {consultasGuardadas.map(c => (<option key={c.id} value={c.id}>{c.nombre}</option>))}
+                        </select>
+                        <Button 
+                            label="Guardar Consulta" 
+                            icon="pi pi-save" 
+                            disabled={!selectedLista || isLoading} 
+                            onClick={() => setMostrarDialogoGuardar(true)} 
+                            size="small" 
+                        />
+                    
                     <button
                         onClick={() => handleExport('excel')} 
                         disabled={isLoading || !selectedLista} // <-- 12. Deshabilitar
@@ -240,7 +420,7 @@ function ListaNegra() {
                         <IconCsv />
                         {isLoading ? 'Exportando...' : 'Exportar CSV'}
                     </button> 
-                    
+                    <div className="ml-auto">
                     <MultiSelect
                         value={visibleColumns} 
                         options={columnOptions} 
@@ -253,6 +433,7 @@ function ListaNegra() {
                         disabled={allColumnNames.length === 0 || !selectedLista} // <-- 12. Deshabilitar
                         filter 
                     />
+                    </div>
                 </div>
             </div>
 
@@ -302,6 +483,34 @@ function ListaNegra() {
                     className="mt-4" 
                 />
             )}
+            
+            {/* --- 11. AÑADIR DIÁLOGOS (copiado de Visor.jsx) --- */}
+            <Dialog 
+                header="Guardar Consulta" 
+                visible={mostrarDialogoGuardar} 
+                className="w-11/12 md:w-1/3"
+                onHide={() => setMostrarDialogoGuardar(false)} 
+                footer={
+                    <div className="flex justify-end gap-2">
+                        <Button label="Cancelar" icon="pi pi-times" onClick={() => setMostrarDialogoGuardar(false)} className={btnSecondary} />
+                        <Button label="Guardar" icon="pi pi-check" onClick={handleSaveConsulta} className={btnPrimary} autoFocus />
+                    </div>
+                }>
+                <InputText value={nuevoNombreConsulta} onChange={(e) => setNuevoNombreConsulta(e.target.value)} placeholder="Nombre de la consulta..." className="w-full mt-2" />
+            </Dialog>
+            <Dialog 
+                header="Confirmar Sobrescritura" 
+                visible={showOverwriteDialog} 
+                className="w-11/12 md:w-1/3"
+                onHide={() => setShowOverwriteDialog(false)} 
+                footer={
+                    <div className="flex justify-end gap-2">
+                        <Button label="Cancelar" icon="pi pi-times" onClick={() => setShowOverwriteDialog(false)} className={btnSecondary} />
+                        <Button label="Sobrescribir" icon="pi pi-check" onClick={handleOverwriteConsulta} className={btnDanger} autoFocus />
+                    </div>
+                }>
+                <p className="m-0 text-sm text-gray-600">Ya existe una consulta llamada "<strong>{nuevoNombreConsulta}</strong>". ¿Deseas sobrescribirla?</p>
+            </Dialog>
         </>
     );
 }

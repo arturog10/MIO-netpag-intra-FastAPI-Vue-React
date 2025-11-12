@@ -272,7 +272,11 @@ function Visor() {
       setNuevoNombreEstrategia("");
       fetchEstrategias();
     } catch (error) {
-      if (error.response?.status === 409) { setMostrarDialogoGuardar(false); setShowOverwriteDialog(true); }
+      if (error.response?.status === 409) { 
+        alert(error.response.data.detail || "Ya existe una estrategia con ese nombre.");
+        setMostrarDialogoGuardar(false); 
+        // setShowOverwriteDialog(true); 
+      }
       else { console.error("Error al guardar:", error); alert("Error al guardar."); }
     }
   };

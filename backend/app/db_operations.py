@@ -359,38 +359,52 @@ def estrategia_existe_db(db_session, nombre: str, cliente: str) -> bool:
         logger.error(f"Error al CHEQUEAR estrategia '{nombre}': {e}", exc_info=True)
         raise e
 
-def guardar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, filtro_columnas: str, filtros_aplicados: str, orden_estado: Optional[str] = None) -> bool:
+def guardar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, filtro_columnas: str, filtros_aplicados: str, orden_estado: Optional[str] = None, id_usuario_creador: Optional[int] = None, usuario_creador: Optional[str] = None) -> bool:
     try:
         tabla = _get_reflected_table("tabla_estrategias")
-        stmt = insert(tabla).values(
-            nombre_estrategia=nombre, codigo_cliente=cliente,
-            columnas_visibles=columnas, filtro_columnas=filtro_columnas,
-            filtros_aplicados=filtros_aplicados,
-            orden_estado = orden_estado
-        )
+        valores = {
+            "nombre_estrategia": nombre, 
+            "codigo_cliente": cliente,
+            "columnas_visibles": columnas, 
+            "filtro_columnas": filtro_columnas,
+            "filtros_aplicados": filtros_aplicados,
+            "orden_estado": orden_estado,
+            "id_usuario_creador": id_usuario_creador, # <-- AÑADIDO
+            "usuario_creador": usuario_creador,       # <-- AÑADIDO            
+        }
+
+        stmt = insert(tabla).values(**valores)
+
         db_session.execute(stmt)
-        logger.info(f"Estrategia '{nombre}' guardada con éxito.")
+        logger.info(f"Estrategia '{nombre}' guardada por usuario {usuario_creador} (ID {id_usuario_creador}).")        
         return True
     except Exception as e:
         logger.error(f"Error al GUARDAR la estrategia '{nombre}': {e}", exc_info=True)
         raise e
 
-def actualizar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, filtro_columnas: str, filtros_aplicados: str, orden_estado: Optional[str] = None) -> bool:
+def actualizar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, filtro_columnas: str, filtros_aplicados: str, orden_estado: Optional[str] = None, id_usuario_creador: Optional[int] = None, usuario_creador: Optional[str] = None) -> bool:
     try:
         tabla = _get_reflected_table("tabla_estrategias")
+
+        valores = {
+            "columnas_visibles": columnas, 
+            "filtro_columnas": filtro_columnas,
+            "filtros_aplicados": filtros_aplicados,
+            "orden_estado": orden_estado,
+            "id_usuario_creador": id_usuario_creador, # <-- AÑADIDO
+            "usuario_creador": usuario_creador        # <-- AÑADIDO
+        }
+
         stmt = update(tabla).where(
             tabla.c.nombre_estrategia == nombre,
             tabla.c.codigo_cliente == cliente
-        ).values(
-            columnas_visibles=columnas, filtro_columnas=filtro_columnas,
-            filtros_aplicados=filtros_aplicados,
-            orden_estado=orden_estado
-        )
+        ).values(**valores)
+
         result = db_session.execute(stmt)
         if result.rowcount == 0:
             logger.warning(f"Se intentó actualizar la estrategia '{nombre}', pero no se encontró.")
             return False
-        logger.info(f"Estrategia '{nombre}' actualizada con éxito.")
+        logger.info(f"Estrategia '{nombre}' actualizada por usuario {usuario_creador} (ID {id_usuario_creador}).")
         return True
     except Exception as e:
         logger.error(f"Error al ACTUALIZAR la estrategia '{nombre}': {e}", exc_info=True)

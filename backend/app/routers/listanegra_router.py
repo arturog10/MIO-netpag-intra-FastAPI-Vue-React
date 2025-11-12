@@ -10,7 +10,8 @@ from app.config import config
 
 # Importaciones de tus archivos
 from app.models import (
-    ListaNegraDataRequest, ListaNegraDataResponse, ListaNegraExportRequest
+    ListaNegraDataRequest, ListaNegraDataResponse, ListaNegraExportRequest,
+    StrategySaveRequest, StrategyLoadResponse
 )
 import app.db_operations as db_ops 
 import app.db_user_operations as db_users 
@@ -34,6 +35,14 @@ def get_b2c_db():
 B2CDBSession = Annotated[Connection, Depends(get_b2c_db)]
 CurrentUserEmail = Annotated[str, Depends(get_current_user_email)] 
 
+def _get_strategy_connection():
+    """Función auxiliar para conectarse a la DB de estrategias"""
+    try:
+        info = db_ops._get_table_info("tabla_estrategias")
+        return info["engine"].connect()
+    except Exception as e:
+        logger.error(f"Error al obtener conexión para 'tabla_estrategias': {e}")
+        raise HTTPException(status_code=500, detail="No se pudo conectar a la DB de estrategias.")
 
 @router.get("/listanegras", response_model=List[str]) # <-- NUEVO ENDPOINT
 def get_listanegra_list():
@@ -73,7 +82,7 @@ def get_listanegra_data(
     """
     Obtiene los datos paginados y filtrados para Lista Negra.
     """
-    logger.info(f"Usuario '{current_user_email}' consultando datos de Lista Negra con filtros: {req.filtros}") 
+    logger.info(f"Usuario '{current_user_email}' consultando datos de '{listanegra_key}' con filtros: {req.filtros}") 
     
     try:
         # --- AUDITORÍA ---
@@ -190,3 +199,156 @@ async def export_listanegra_data(
     except Exception as e:
         logger.error(f"Error en la exportación de Lista Negra: {e}", exc_info=True) 
         raise HTTPException(status_code=500, detail=f"Error al generar el archivo: {e}")
+    
+@router.get("/consultas/{listanegra_key}", response_model=List[dict])
+def get_consultas_for_lista(listanegra_key: str):
+    """Obtiene la lista de consultas (id, nombre) para una lista negra."""
+    with _get_strategy_connection() as connection:
+        with connection.begin():
+            try:
+                # Reutilizamos la función de db_ops, pasando la key de la lista como "cliente"
+                consultas_tuplas = db_ops.cargar_estrategias_db(connection, listanegra_key)
+                return [{"id": id, "nombre": nombre} for id, nombre in consultas_tuplas]
+            except Exception as e:
+                logger.error(f"Error en endpoint 'cargar_consultas_db': {e}")
+                raise HTTPException(status_code=500, detail="Error al cargar consultas.")
+
+@router.get("/consultas/load/{consulta_id}", response_model=StrategyLoadResponse)
+def load_consulta(
+    consulta_id: int,
+    audit_db: B2CDBSession, # Nota: Usamos B2CDBSession que ya definimos
+    current_user_email: CurrentUserEmail
+):
+    """Carga la configuración de una consulta por su ID."""
+    with _get_strategy_connection() as connection:
+        with connection.begin():
+            try:
+                data = db_ops.cargar_una_estrategia_db(connection, consulta_id)
+                if not data:
+                    raise HTTPException(status_code=404, detail="Consulta no encontrada")
+                
+                try:
+                    db_users.registrar_accion_db(
+                        audit_db,
+                        usuario=current_user_email,
+                        accion="cargar_consulta_ln", # Acción específica de LN
+                        detalles={"consulta_id": consulta_id}
+                    )
+                except Exception as e_audit:
+                    logger.error(f"Error al registrar auditoría (cargar_consulta_ln): {e_audit}")
+
+                return StrategyLoadResponse(**data)
+            except Exception as e:
+                logger.error(f"Error en endpoint 'cargar_una_consulta_db': {e}")
+                raise HTTPException(status_code=500, detail="Error al cargar la consulta.")
+
+@router.post("/consultas/{listanegra_key}")
+def save_consulta(
+    listanegra_key: str, 
+    req: StrategySaveRequest,
+    audit_db: B2CDBSession,
+    current_user_email: CurrentUserEmail
+):
+    """Guarda una NUEVA consulta. Falla si ya existe."""
+    id_usuario = db_users.get_user_id_by_email(audit_db, current_user_email)
+    
+    with _get_strategy_connection() as connection:
+        
+        # --- INICIO DEL CAMBIO ---
+        
+        # 1. VERIFICAMOS SI EXISTE ANTES de iniciar la transacción
+        try:
+            existe = db_ops.estrategia_existe_db(connection, req.nombre_estrategia, listanegra_key)
+            if existe:
+                # Si existe, lanzamos el 409 y la función termina aquí.
+                raise HTTPException(status_code=409, detail="Ya existe una consulta con ese nombre.")
+        
+        except HTTPException:
+            raise # Re-lanzar el 409
+        except Exception as e:
+            logger.error(f"Error al verificar existencia de consulta: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="Error al verificar la consulta.")
+
+        # 2. SI LLEGA AQUÍ, ES SEGURO GUARDAR. AHORA INICIAMOS LA TRANSACCIÓN.
+        with connection.begin():
+            try:
+                # Ya no necesitamos el 'if existe:' aquí
+                success = db_ops.guardar_estrategia_db(
+                    connection,
+                    nombre=req.nombre_estrategia,
+                    cliente=listanegra_key, 
+                    columnas=req.columnas_visibles,
+                    filtro_columnas=req.filtro_columnas,
+                    filtros_aplicados=req.filtros_aplicados,
+                    orden_estado=req.orden_estado,
+                    id_usuario_creador=id_usuario,
+                    usuario_creador=current_user_email
+                )
+                if not success:
+                    raise HTTPException(status_code=500, detail="No se pudo guardar la consulta.")
+                
+                try:
+                    db_users.registrar_accion_db(
+                        audit_db,
+                        usuario=current_user_email,
+                        accion="guardar_consulta_ln",
+                        detalles={
+                            "lista_key": listanegra_key,
+                            "nombre_consulta": req.nombre_estrategia
+                        }
+                    )
+                except Exception as e_audit:
+                    logger.error(f"Error al registrar auditoría (guardar_consulta_ln): {e_audit}")
+
+                return {"status": "Consulta guardada con éxito"}
+            
+            except Exception as e:
+                # Este 'except' ahora solo captura errores del 'guardar_estrategia_db' o 'registrar_accion_db'
+                logger.error(f"Error en endpoint 'guardar_consulta_db': {e}", exc_info=True)
+                raise HTTPException(status_code=500, detail="Error al guardar la consulta.")
+        
+        # --- FIN DEL CAMBIO ---
+
+@router.put("/consultas/{listanegra_key}")
+def overwrite_consulta(
+    listanegra_key: str, 
+    req: StrategySaveRequest,
+    audit_db: B2CDBSession,
+    current_user_email: CurrentUserEmail
+):
+    id_usuario = db_users.get_user_id_by_email(audit_db, current_user_email)
+    """Actualiza (sobrescribe) una consulta existente."""
+    with _get_strategy_connection() as connection:
+        with connection.begin():
+            try:
+                success = db_ops.actualizar_estrategia_db(
+                    connection,
+                    nombre=req.nombre_estrategia,
+                    cliente=listanegra_key, # <-- Guarda la key de la lista como "cliente"
+                    columnas=req.columnas_visibles,
+                    filtro_columnas=req.filtro_columnas,
+                    filtros_aplicados=req.filtros_aplicados,
+                    orden_estado=req.orden_estado,
+                    id_usuario_creador=id_usuario,
+                    usuario_creador=current_user_email
+                )
+                if not success:
+                    raise HTTPException(status_code=404, detail="No se encontró la consulta para actualizar.")
+                
+                try:
+                    db_users.registrar_accion_db(
+                        audit_db,
+                        usuario=current_user_email,
+                        accion="actualizar_consulta_ln",
+                        detalles={
+                            "lista_key": listanegra_key,
+                            "nombre_consulta": req.nombre_estrategia
+                        }
+                    )
+                except Exception as e_audit:
+                    logger.error(f"Error al registrar auditoría (actualizar_consulta_ln): {e_audit}")
+
+                return {"status": "Consulta actualizada con éxito"}
+            except Exception as e:
+                logger.error(f"Error en endpoint 'actualizar_consulta_db': {e}")
+                raise HTTPException(status_code=500, detail="Error al actualizar la consulta.")    
