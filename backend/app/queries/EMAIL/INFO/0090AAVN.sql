@@ -1,0 +1,10 @@
+-- A ESTOS RUT "SÍ" SE LES PUEDE HACER GESTIÓN DE COBRANZA
+
+SELECT DISTINCT 
+    RUT
+FROM 
+    B2C_OPER.DBO.[1009_RTG_0090AAVN_] WITH (NOLOCK)
+WHERE 
+    ISNULL(ULTIMA_GESTION, '') <> 'BLOQUEO' -- Validar que no esté bloqueado
+    AND CONVERT(DECIMAL(18,2), DEUDAACT) > CONVERT(DECIMAL(18,2), 600) -- Validar que la deuda sea mayor a 600
+    AND ISNULL(NOMBRE, '') <> 'SIN NOMBRE' -- Validar que el nombre no sea "SIN NOMBRE"

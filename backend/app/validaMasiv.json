@@ -1,0 +1,20 @@
+{
+    "db_connection": "DRIVER={SQL Server};SERVER=192.168.168.96;DATABASE=B2C_OPER;Trusted_Connection=yes;",
+    "rutas":{
+        "SMS": "queries/SMS/",
+        "MAIL":"queries/EMAIL/Cobranza/",
+        "MAIL_INF":"queries/EMAIL/INFO/"
+    },
+    "queries": {
+        "0020ACSA": "0020ACSA.sql",
+        "0090AAVN": "0090AAVN.sql",
+        "0200ENTE": "0200ENTE.sql",
+        "0150RPAS": "0150RPAS.sql",
+        "0290LIDB": "0290LIDB.sql",
+        "0010LHER": "0010LHER.sql",
+        "0120ENEL": "0120ENEL.sql",
+        "0370FORU": "0370FORU.sql",
+        "0360CQTA": "0360CQTA.sql",
+        "0390UNIP": "0390UNIP.sql"
+    }
+}

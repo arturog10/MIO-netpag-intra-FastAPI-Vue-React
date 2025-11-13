@@ -11,6 +11,7 @@ import LoginPage from './pages/LoginPage';
 import AdminPage from './pages/AdminPage.jsx';
 import TrazabilidadPage from './pages/TrazabilidadPage.jsx';
 import ListaNegraPage from './pages/ListaNegraPage.jsx';
+import GeneradorCampanasPage from './pages/GeneradorCampanasPage.jsx';
 
 
 // Componente de Layout (Sin cambios)
@@ -86,6 +87,10 @@ function App() {
         <Route 
           path="PlaceholderPage" 
           element={<PlaceholderPage title="Pagina en construccion" />} 
+        />
+        <Route 
+          path="campanas" 
+          element={<GeneradorCampanasPage />} 
         />
         <Route 
           path="admin" 

@@ -428,6 +428,8 @@ def cargar_una_estrategia_db(db_session, id_estrategia: int) -> Optional[dict]:
     try:
         tabla = _get_reflected_table("tabla_estrategias")
         stmt = select(
+            tabla.c.codigo_cliente,   
+            tabla.c.nombre_estrategia, 
             tabla.c.columnas_visibles,
             tabla.c.filtros_aplicados,
             tabla.c.orden_estado

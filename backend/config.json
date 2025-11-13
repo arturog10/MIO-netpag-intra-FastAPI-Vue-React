@@ -22,21 +22,29 @@
     "table": "Estrategias"
   },
 
+  "tabla_plantillas_campanas": {
+    "db_key": "b2c",
+    "schema": "dbo",
+    "table": "PlantillasCampanas"
+  },
+
   "listanegra_table_map": {
-    "Lista Negra Principal": {
+    "Lista Principal": {
       "db_key": "b2c",
       "schema": "dbo",
       "table": "lista_negra"
     },
-    "Lista Negra Secundaria": {
+    "Lista Secundaria": {
       "db_key": "b2c",
       "schema": "dbo",
       "table": "tbl_listas"
     }
   },
-
-  "tabla_usuarios": { "db_key": "b2c", "schema": "dbo", "table": "Usuarios" },
-
+  "tabla_usuarios": {
+    "db_key": "b2c",
+    "schema": "dbo",
+    "table": "Usuarios"
+  },
   "tabla_auditoria": {
     "db_key": "b2c",
     "schema": "dbo",

@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -33,6 +34,8 @@ class StrategyLoadResponse(BaseModel):
     columnas_visibles: str
     filtros_aplicados: str
     orden_estado: Optional[str] = None
+    codigo_cliente: Optional[str] = None  # <-- Vital para que el frontend sepa qué cliente cargar
+    nombre_estrategia: Optional[str] = None
 
 # --- Modelos para Exportación ---
 
@@ -88,3 +91,44 @@ class ListaNegraExportRequest(BaseModel):
     visible_columns: List[str]
     sort_field: Optional[str] = None
     sort_order: Optional[int] = None # 1 para ASC, -1 para DESC    
+
+
+# --- (Añade esto al final del archivo models.py) ---
+
+# --- Modelos para Plantillas de Campañas ---
+
+class PlantillaSaveRequest(BaseModel):
+    """
+    Lo que el frontend envía para GUARDAR o ACTUALIZAR una plantilla.
+    Los JSON se envían como strings.
+    """
+    nombre_plantilla: str
+    id_estrategia_base: int
+    reglas_validacion_json: str
+    reglas_procesamiento_json: str
+    modo_salida: str # "archivo" o "api"
+
+class PlantillaResponse(BaseModel):
+    """
+    Lo que el backend devuelve al CARGAR una plantilla completa.
+    """
+    id: int
+    nombre_plantilla: str
+    id_estrategia_base: int
+    reglas_validacion_json: str
+    reglas_procesamiento_json: str
+    modo_salida: str
+    id_usuario_creador: Optional[int] = None
+    usuario_creador: Optional[str] = None
+    fecha_creacion: Optional[datetime] = None
+    
+    # Permite que Pydantic lea desde un objeto de base de datos
+    class Config:
+        from_attributes = True
+
+class GruposUnicosRequest(BaseModel):
+    """
+    Lo que el frontend envía para pedir los grupos de una columna.
+    """
+    id_estrategia_base: int
+    columna_division: str    

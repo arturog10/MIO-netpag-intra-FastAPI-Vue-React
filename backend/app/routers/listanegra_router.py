@@ -268,7 +268,8 @@ def save_consulta(
         except Exception as e:
             logger.error(f"Error al verificar existencia de consulta: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Error al verificar la consulta.")
-
+        
+        connection.commit()
         # 2. SI LLEGA AQUÍ, ES SEGURO GUARDAR. AHORA INICIAMOS LA TRANSACCIÓN.
         with connection.begin():
             try:
