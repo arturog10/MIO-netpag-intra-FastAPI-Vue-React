@@ -12,6 +12,7 @@ import AdminPage from './pages/AdminPage.jsx';
 import TrazabilidadPage from './pages/TrazabilidadPage.jsx';
 import ListaNegraPage from './pages/ListaNegraPage.jsx';
 import GeneradorCampanasPage from './pages/GeneradorCampanasPage.jsx';
+import ReportesPage from './pages/ReportesPage.jsx';
 
 
 // Componente de Layout (Sin cambios)
@@ -91,6 +92,10 @@ function App() {
         <Route 
           path="campanas" 
           element={<GeneradorCampanasPage />} 
+        />
+        <Route 
+          path="reportes" 
+          element={<ReportesPage />} 
         />
         <Route 
           path="admin" 
