@@ -5,7 +5,7 @@ from .logging_config import setup_logging
 from app.config import config
 
 # --- Importamos nuestros routers ---
-from .routers import (data_visor,auth_router, admin_router,trazabilidad_router, listanegra_router, campanas_router)
+from .routers import (data_visor,auth_router, admin_router,trazabilidad_router, listanegra_router, campanas_router, reportes_router)
 
 
 # =======================================================
@@ -40,6 +40,7 @@ app.include_router(admin_router.router)
 app.include_router(trazabilidad_router.router)
 app.include_router(listanegra_router.router)
 app.include_router(campanas_router.router)
+app.include_router(reportes_router.router)
 
 
 
