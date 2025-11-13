@@ -3,6 +3,8 @@
 /backend/__pycache__/
 /backend/.env
 /backend/logs/
+/backend/campanas_generadas/
+
 
 *.pyc
 
