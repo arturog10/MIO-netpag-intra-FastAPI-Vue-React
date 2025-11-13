@@ -12,7 +12,7 @@ import AdminPage from './pages/AdminPage.jsx';
 import TrazabilidadPage from './pages/TrazabilidadPage.jsx';
 import ListaNegraPage from './pages/ListaNegraPage.jsx';
 import GeneradorCampanasPage from './pages/GeneradorCampanasPage.jsx';
-import ReportesPage from './pages/ReportesPage.jsx';
+import ReportesPage from './pages/reportesPage.jsx';
 
 
 // Componente de Layout (Sin cambios)
