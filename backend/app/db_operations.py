@@ -4,7 +4,8 @@ from datetime import datetime
 from typing import Optional
 from sqlalchemy import (
     text, select, func, cast, String, column, Table,
-    MetaData, insert, update, delete, Numeric, Date, and_
+    MetaData, insert, update, delete, Numeric, Date, and_,
+    DateTime, Time
 )
 from app.config import config
 
@@ -153,7 +154,20 @@ def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Tab
             # --- MANEJO DE FECHAS ROBUSTO ---
             if es_fecha:
                 # Usar la expresión SQL cruda directamente
-                sql_expr = _create_robust_date_conversion(col_name)
+                is_native_date = False
+                if tabla is not None and col_name in tabla.c:
+                    col_type = tabla.c[col_name].type
+                    # Comprobamos si el tipo es nativo de fecha/hora
+                    if isinstance(col_type, (Date, DateTime, Time)):
+                        is_native_date = True
+
+                if is_native_date:
+                    # SOLUCIÓN BUG: La columna es DATE, usar un CAST simple.
+                    sql_expr = cast(safe_col, Date)
+                else:
+                    # REQUISITO: La columna es TEXTO, usar el conversor robusto.
+                    sql_expr = _create_robust_date_conversion(col_name)
+
             elif is_numeric:
                 sql_expr = cast(safe_col, Numeric(18, 2))
             else:
@@ -166,7 +180,7 @@ def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Tab
                     clean_val_desde = str(val_desde).strip()[:10]
                     
                     if es_fecha:
-                        # Intentar ambos formatos: DD/MM/YYYY y DD-MM-YYYY
+                        # Parsear la fecha del frontend (DD/MM/YYYY o DD-MM-YYYY)
                         valor_param = None
                         for date_format in ['%d/%m/%Y', '%d-%m-%Y']:
                             try:
@@ -179,23 +193,28 @@ def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Tab
                             logger.warning(f"No se pudo parsear la fecha 'desde' para {col_name}: {clean_val_desde}")
                             continue
                         
-                        sql_filters.append(text(f"({sql_expr.text}) >= :{param_name}"))
+                        # --- INICIO DEL ARREGLO ---
+                        if is_native_date:
+                            # Si es fecha nativa, usa el objeto CAST directamente
+                            sql_filters.append(sql_expr >= text(f":{param_name}"))
+                        else:
+                            # Si es texto, usa la conversión robusta .text
+                            sql_filters.append(text(f"({sql_expr.text}) >= :{param_name}"))
+                        # --- FIN DEL ARREGLO ---
+
                         params[param_name] = valor_param
 
-                    else:
+                    else: # No es fecha (numérico o texto)
                         valor_param = val_desde
-                    
-                    # Para fechas, usar la comparación directamente con el SQL raw
                         sql_filters.append(sql_expr >= text(f":{param_name}"))
                         params[param_name] = valor_param
-                    # NO agregar a params porque ya está en el SQL
 
                 if val_hasta:
                     param_name = f"hasta_{safe_param_name}"
                     clean_val_hasta = str(val_hasta).strip()[:10]
                     
                     if es_fecha:
-                        # Intentar ambos formatos: DD/MM/YYYY y DD-MM-YYYY
+                        # Parsear la fecha del frontend
                         valor_param = None
                         for date_format in ['%d/%m/%Y', '%d-%m-%Y']:
                             try:
@@ -207,16 +226,22 @@ def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Tab
                         if valor_param is None:
                             logger.warning(f"No se pudo parsear la fecha 'hasta' para {col_name}: {clean_val_hasta}")
                             continue
-                        sql_filters.append(text(f"({sql_expr.text}) <= :{param_name}"))
+                        
+                        # --- INICIO DEL ARREGLO ---
+                        if is_native_date:
+                            # Si es fecha nativa, usa el objeto CAST directamente
+                            sql_filters.append(sql_expr <= text(f":{param_name}"))
+                        else:
+                            # Si es texto, usa la conversión robusta .text
+                            sql_filters.append(text(f"({sql_expr.text}) <= :{param_name}"))
+                        # --- FIN DEL ARREGLO ---
+                        
                         params[param_name] = valor_param
-                    else:
+                        
+                    else: # No es fecha
                         valor_param = val_hasta
-                    
-                    # Para fechas, usar la comparación directamente con el SQL raw
                         sql_filters.append(sql_expr <= text(f":{param_name}"))
                         params[param_name] = valor_param
-                    
-                    # NO agregar a params porque ya está en el SQL
                     
             except (ValueError, TypeError) as e:
                 if es_fecha: 
@@ -263,7 +288,7 @@ def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Tab
 def contar_datos_cliente(db_session, client_code: str, filtros: Optional[dict] = None) -> int:
     try:
         tabla = _get_reflected_table("cliente_table_map", client_code)
-        sql_filters, params = construir_where_dinamico(filtros)
+        sql_filters, params = construir_where_dinamico(filtros, tabla)
 
         stmt = select(func.count()).select_from(tabla)
         if sql_filters:
@@ -279,7 +304,7 @@ def contar_datos_cliente(db_session, client_code: str, filtros: Optional[dict] =
 def obtener_datos_cliente(db_session, client_code: str, filtros: Optional[dict] = None, page: int = 1, items_per_page: int = 15, sort_field: Optional[str] = None, sort_order: Optional[int] = None):
     try:
         tabla = _get_reflected_table("cliente_table_map", client_code)
-        sql_filters, params = construir_where_dinamico(filtros)
+        sql_filters, params = construir_where_dinamico(filtros, tabla)
 
         stmt = select(tabla)
         if sql_filters:
@@ -322,7 +347,7 @@ def obtener_datos_cliente(db_session, client_code: str, filtros: Optional[dict] 
 def obtener_todos_los_datos_filtrados(db_session, client_code: str, filtros: Optional[dict] = None):
     try:
         tabla = _get_reflected_table("cliente_table_map", client_code)
-        sql_filters, params = construir_where_dinamico(filtros)
+        sql_filters, params = construir_where_dinamico(filtros,tabla)
 
         stmt = select(tabla)
         if sql_filters:
@@ -462,7 +487,7 @@ def obtener_columnas_listanegra(db_session, listanegra_key: str) -> list[str]:
 def contar_datos_listanegra(db_session, listanegra_key: str, filtros: Optional[dict] = None) -> int:
     try:
         tabla = _get_reflected_table("listanegra_table_map", listanegra_key)
-        sql_filters, params = construir_where_dinamico(filtros)
+        sql_filters, params = construir_where_dinamico(filtros, tabla)
         stmt = select(func.count()).select_from(tabla)
         if sql_filters: stmt = stmt.where(and_(*sql_filters))
         result = db_session.execute(stmt, params).scalar_one_or_none()
@@ -478,7 +503,7 @@ def obtener_datos_listanegra(db_session, listanegra_key: str, filtros: Optional[
     """
     try:
         tabla = _get_reflected_table("listanegra_table_map", listanegra_key)
-        sql_filters, params = construir_where_dinamico(filtros)
+        sql_filters, params = construir_where_dinamico(filtros, tabla)
 
         stmt = select(tabla)
         if sql_filters:
@@ -523,7 +548,7 @@ def obtener_todos_los_datos_listanegra(db_session, listanegra_key: str, filtros:
     """
     try:
         tabla = _get_reflected_table("listanegra_table_map", listanegra_key)
-        sql_filters, params = construir_where_dinamico(filtros)
+        sql_filters, params = construir_where_dinamico(filtros, tabla)
 
         stmt = select(tabla)
         if sql_filters:
@@ -555,46 +580,3 @@ def obtener_todos_los_datos_listanegra(db_session, listanegra_key: str, filtros:
         logger.error(f"Error al EXPORTAR datos de lista_negra: {e}", exc_info=True)
         raise e
 
-# --- OPERACIONES DE REPORTES (DASHBOARD) ---    
-def obtener_datos_funnel_db(db_session, fecha_inicio: str, periodo: str) -> list[dict]:
-    """
-    Ejecuta la consulta del Funnel de Cobranza.
-    """
-    try:
-        # Nota: La query original estaba hardcodeada para '0020ACSA'. 
-        # Si quieres que sea dinámico, pasa 'cliente' como argumento.
-        query = text("""
-            DECLARE @FECHA_INICIO VARCHAR(10)=:fecha_inicio;
-            DECLARE @PERIODO VARCHAR(10)=:periodo;
-            
-            WITH TodasLasGestiones AS (
-                SELECT traf.CLIENTE, asig.CARTERA, traf.FECHA, traf.RUT, traf.TIPIFICACION, traf.gestion 
-                FROM b2c.dbo.[0900TRAF_202511MASI] traf
-                INNER JOIN B2C.dbo.[0900EFIC_BASEASIG] asig ON traf.IC = asig.IC
-                WHERE traf.CLIENTE='0020ACSA'
-                AND traf.TIPO='BOT'
-                AND asig.PERIODO = @PERIODO
-                AND traf.fecha >= @FECHA_INICIO
-            )
-            SELECT
-                CLIENTE,
-                FECHA,
-                MAX(CARTERA) as CARTERA,
-                COUNT(*) AS [Q.Gestiones],
-                COUNT(DISTINCT RUT) AS [Q.Deudores],
-                COUNT(DISTINCT CASE WHEN TIPIFICACION = 'CD' THEN RUT END) AS [Q.CD],
-                COUNT(DISTINCT CASE WHEN Gestion='Compromiso' THEN RUT END) AS [Q.Compromisos]
-            FROM
-                TodasLasGestiones
-            GROUP BY
-                CLIENTE,FECHA,CARTERA
-            ORDER BY
-                CLIENTE,FECHA,CARTERA;
-        """)
-        
-        result = db_session.execute(query, {"fecha_inicio": fecha_inicio, "periodo": periodo})
-        return [dict(row._mapping) for row in result.fetchall()]
-        
-    except Exception as e:
-        logger.error(f"Error obteniendo datos del funnel: {e}", exc_info=True)
-        raise e    

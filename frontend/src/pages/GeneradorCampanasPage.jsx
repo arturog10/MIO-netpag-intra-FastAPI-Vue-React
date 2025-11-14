@@ -27,7 +27,7 @@ const tiposCampanaOptions = [
 ];
 
 function GeneradorCampanasPage() {
-    const { token } = useAuth();
+    const { token, user } = useAuth();
     const toast = useRef(null);
 
     // --- ESTADOS DE UI ---
@@ -328,6 +328,8 @@ function GeneradorCampanasPage() {
         );
     };
 
+    // Determinar si es admin
+    const isAdmin = user?.rol === 'admin';
     return (
         <div className="w-full card">
             <Toast ref={toast} />
@@ -406,7 +408,10 @@ function GeneradorCampanasPage() {
                 <TabPanel header="Mis Plantillas">
                     <div className="mb-4 flex justify-between">
                         <Button label="Refrescar Lista" icon="pi pi-refresh" onClick={fetchPlantillas} size="small" className={btnSecondary} />
-                        <Button label="Nueva Plantilla" icon="pi pi-plus" onClick={() => { resetForm(); setActiveIndex(1); }} size="small" className={btnPrimary} />
+                        {/* --- 3. OCULTAR BOTÓN NUEVA PLANTILLA --- */}
+                        {isAdmin && (
+                            <Button label="Nueva Plantilla" icon="pi pi-plus" onClick={() => { resetForm(); setActiveIndex(1); }} size="small" className={btnPrimary} />
+                        )}
                     </div>
                     <DataTable value={plantillasGuardadas} stripedRows size="small" emptyMessage="No hay plantillas.">
                         <Column field="id" header="ID" sortable style={{width: '60px'}} />
@@ -422,12 +427,16 @@ function GeneradorCampanasPage() {
                         <Column header="Acciones" body={(rowData) => (
                             <div className="flex gap-2">
                                 <Button icon="pi pi-play" className="p-button-rounded p-button-success p-button-text" tooltip="Ejecutar" onClick={() => handleEjecutar(rowData)} />
-                                <Button icon="pi pi-pencil" className="p-button-rounded p-button-info p-button-text" tooltip="Editar" onClick={() => handleEditPlantilla(rowData)} />
+                                {isAdmin && (
+                                    <Button icon="pi pi-pencil" className="p-button-rounded p-button-info p-button-text" tooltip="Editar" onClick={() => handleEditPlantilla(rowData)} />
+                                )}
                             </div>
                         )} />
                     </DataTable>
                 </TabPanel>
-
+                
+                {/* --- 5. OCULTAR PESTAÑA DE EDICIÓN COMPLETA --- */}
+                {isAdmin && (
                 <TabPanel header={isEditing ? "Editar Plantilla" : "Nueva Plantilla"}>
                     <div className="flex flex-col gap-6 max-w-5xl mx-auto">
                         <div className="flex flex-col gap-2">
@@ -498,6 +507,7 @@ function GeneradorCampanasPage() {
                         </div>
                     </div>
                 </TabPanel>
+                )}
             </TabView>
         </div>
     );

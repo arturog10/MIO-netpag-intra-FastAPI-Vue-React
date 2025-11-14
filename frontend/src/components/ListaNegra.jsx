@@ -40,7 +40,7 @@ function ListaNegra() {
     const [sortConfig, setSortConfig] = useState({ field: null, order: 1 });
     const [filtrosActivos, setFiltrosActivos] = useState({});
     const [first, setFirst] = useState(0); 
-    const [itemsPerPage, setItemsPerPage] = useState(15); 
+    const [itemsPerPage, setItemsPerPage] = useState(50); 
     const [allColumnNames, setAllColumnNames] = useState([]); 
     const [visibleColumns, setVisibleColumns] = useState([]); 
     const [filtroPanelKey, setFiltroPanelKey] = useState(0); 

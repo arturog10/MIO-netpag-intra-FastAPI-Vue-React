@@ -51,7 +51,7 @@ function Visor() {
   const [visibleColumns, setVisibleColumns] = useState([]); // Objetos {field, header} con ORDEN
   const [totalRows, setTotalRows] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(15);
+  const [rowsPerPage, setRowsPerPage] = useState(50);
   const [filtrosActivos, setFiltrosActivos] = useState({});
 
   // --- ESTADO PARA ORDENAMIENTO ---

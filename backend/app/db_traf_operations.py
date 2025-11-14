@@ -50,7 +50,7 @@ def get_traf_data(db_session: Connection, sufijo: str, filtros: dict, columnas: 
         cols_to_select = [column(c.strip()) for c in columnas]
 
         # 2. Usamos el helper estándar de tu proyecto
-        where_clauses, params = construir_where_dinamico(filtros)
+        where_clauses, params = construir_where_dinamico(filtros, tabla)
         
         # 3. Construimos la consulta seleccionando las columnas explícitas
         stmt = select(*cols_to_select).select_from(tabla)

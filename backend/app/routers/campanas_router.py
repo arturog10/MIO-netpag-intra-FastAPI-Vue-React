@@ -9,8 +9,8 @@ from pydantic import BaseModel
 from app.models import PlantillaSaveRequest, PlantillaResponse, GruposUnicosRequest
 from app import db_plantillas_operations as db_plantillas
 from app import db_user_operations as db_users
-from app import db_operations # Necesario para buscar grupos únicos
-from app.auth_security import get_current_user_email
+from app import db_operations 
+from app.auth_security import get_current_user_email, get_current_admin_user # <-- 1. IMPORTAR ADMIN USER
 from app.database import get_db_session
 
 # Importar la lógica del pipeline
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/api/campanas",
     tags=["Campanas"],
-    dependencies=[Depends(get_current_user_email)] 
+    # dependencies=[Depends(get_current_user_email)] # <-- QUITAMOS LA DEPENDENCIA GLOBAL (algunas rutas requieren admin)
 )
 
 # --- Dependencias de DB ---
@@ -30,11 +30,12 @@ def get_b2c_db():
 
 B2CDBSession = Annotated[Connection, Depends(get_b2c_db)]
 CurrentUserEmail = Annotated[str, Depends(get_current_user_email)] 
+CurrentAdminUser = Annotated[str, Depends(get_current_admin_user)] # <-- 2. NUEVA ANOTACIÓN
 
 # --- ENDPOINTS DE GESTIÓN DE PLANTILLAS ---
 
 @router.get("/plantillas", response_model=List[dict])
-def get_plantillas_list(db: B2CDBSession):
+def get_plantillas_list(db: B2CDBSession, current_user: str = Depends(get_current_user_email)): # Visible para todos
     """Obtiene la lista de todas las plantillas guardadas."""
     try:
         return db_plantillas.listar_plantillas_db(db)
@@ -42,11 +43,20 @@ def get_plantillas_list(db: B2CDBSession):
         logger.error(f"Error al listar plantillas: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error al obtener plantillas.")
 
+@router.get("/plantillas/{id_plantilla}")
+def get_plantilla_detail(id_plantilla: int, db: B2CDBSession, current_user: str = Depends(get_current_user_email)): # Visible para todos
+    plantilla = db_plantillas.cargar_plantilla_db(db, id_plantilla)
+    if not plantilla:
+        raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+    return plantilla
+
+# --- RUTAS PROTEGIDAS SOLO PARA ADMIN ---
+
 @router.post("/plantillas")
 def save_plantilla(
     req: PlantillaSaveRequest,
     db: B2CDBSession,
-    current_user_email: CurrentUserEmail
+    current_user_email: CurrentAdminUser # <-- 3. SOLO ADMIN PUEDE GUARDAR
 ):
     """Guarda una NUEVA plantilla de campaña."""
     try:
@@ -78,53 +88,12 @@ def save_plantilla(
         logger.error(f"Error al guardar plantilla: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error interno al guardar la plantilla.")
 
-# (Aquí irían los endpoints PUT para actualizar y DELETE para borrar)
-
-# --- ENDPOINTS DE EJECUCIÓN ASÍNCRONA (Como Trazabilidad) ---
-
-@router.post("/ejecutar/{id_plantilla}")
-async def ejecutar_campana(
-    id_plantilla: int,
-    background_tasks: BackgroundTasks,
-    current_user_email: CurrentUserEmail
-):
-    """Inicia la ejecución asíncrona de un pipeline de campaña."""
-    task_id = str(uuid.uuid4())
-    tasks_db[task_id] = {"status": "running", "data": None}
-    
-    # Obtenemos la db_key de la conexión 'b2c' para pasarla a la tarea
-    db_key_b2c = "b2c" 
-    
-    background_tasks.add_task(ejecutar_pipeline_campana, id_plantilla, task_id, db_key_b2c)
-    
-    logger.info(f"Tarea de campaña {task_id} iniciada por {current_user_email}.")
-    return {"task_id": task_id}
-
-@router.get("/status/{task_id}")
-async def get_task_status(task_id: str):
-    """Sondea el estado de una tarea de campaña en ejecución."""
-    task = tasks_db.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
-    return {"status": task["status"], "error": task.get("error_message")}
-
-@router.get("/resultados/{task_id}")
-async def get_task_results(task_id: str):
-    """Obtiene los resultados (lista de archivos) de una tarea completada."""
-    task = tasks_db.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
-    if task["status"] != "complete":
-        raise HTTPException(status_code=400, detail=f"La tarea no está completa. Estado: {task['status']}")
-    
-    return {"resultados": task["data"]}
-
 @router.put("/plantillas/{id_plantilla}")
 def update_plantilla(
     id_plantilla: int,
     req: PlantillaSaveRequest,
     db: B2CDBSession,
-    current_user_email: CurrentUserEmail
+    current_user_email: CurrentAdminUser # <-- 4. SOLO ADMIN PUEDE EDITAR
 ):
     """Actualiza una plantilla existente."""
     try:
@@ -151,10 +120,41 @@ def update_plantilla(
     except Exception as e:
         logger.error(f"Error al actualizar plantilla: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error interno al actualizar la plantilla.")
+
+# --- ENDPOINTS DE EJECUCIÓN ASÍNCRONA (Disponibles para todos) ---
+
+@router.post("/ejecutar/{id_plantilla}")
+async def ejecutar_campana(
+    id_plantilla: int,
+    background_tasks: BackgroundTasks,
+    current_user_email: CurrentUserEmail # <-- 5. CUALQUIER USUARIO PUEDE EJECUTAR
+):
+    """Inicia la ejecución asíncrona de un pipeline de campaña."""
+    task_id = str(uuid.uuid4())
+    tasks_db[task_id] = {"status": "running", "data": None}
     
-@router.get("/plantillas/{id_plantilla}")
-def get_plantilla_detail(id_plantilla: int, db: B2CDBSession):
-    plantilla = db_plantillas.cargar_plantilla_db(db, id_plantilla)
-    if not plantilla:
-        raise HTTPException(status_code=404, detail="Plantilla no encontrada")
-    return plantilla    
+    db_key_b2c = "b2c" 
+    
+    background_tasks.add_task(ejecutar_pipeline_campana, id_plantilla, task_id, db_key_b2c)
+    
+    logger.info(f"Tarea de campaña {task_id} iniciada por {current_user_email}.")
+    return {"task_id": task_id}
+
+@router.get("/status/{task_id}")
+async def get_task_status(task_id: str, current_user: str = Depends(get_current_user_email)):
+    """Sondea el estado de una tarea de campaña en ejecución."""
+    task = tasks_db.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
+    return {"status": task["status"], "error": task.get("error_message")}
+
+@router.get("/resultados/{task_id}")
+async def get_task_results(task_id: str, current_user: str = Depends(get_current_user_email)):
+    """Obtiene los resultados (lista de archivos) de una tarea completada."""
+    task = tasks_db.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
+    if task["status"] != "complete":
+        raise HTTPException(status_code=400, detail=f"La tarea no está completa. Estado: {task['status']}")
+    
+    return {"resultados": task["data"]}

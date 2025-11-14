@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.engine import Connection
 from typing import List, Annotated
 
-from app import db_operations
+from app import db_reportes_operations
 from app.auth_security import get_current_user_email
 from app.database import get_db_session
 
@@ -29,7 +29,7 @@ def get_funnel_data(
 ):
     """Obtiene los datos para el dashboard de Funnel."""
     try:
-        data = db_operations.obtener_datos_funnel_db(db, fecha_inicio, periodo)
+        data = db_reportes_operations.obtener_datos_funnel_db(db, fecha_inicio, periodo)
         return data
     except Exception as e:
         logger.error(f"Error en endpoint funnel: {e}")
