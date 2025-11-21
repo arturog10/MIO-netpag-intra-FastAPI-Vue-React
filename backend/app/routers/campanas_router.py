@@ -14,7 +14,9 @@ from app.auth_security import get_current_user_email, get_current_admin_user # <
 from app.database import get_db_session
 
 # Importar la lógica del pipeline
-from app.pipeline_campana import ejecutar_pipeline_campana, tasks_db
+
+from app.pipelines.pipeline_campana import ejecutar_pipeline_campana, tasks_db
+
 
 logger = logging.getLogger(__name__)
 
@@ -158,3 +160,38 @@ async def get_task_results(task_id: str, current_user: str = Depends(get_current
         raise HTTPException(status_code=400, detail=f"La tarea no está completa. Estado: {task['status']}")
     
     return {"resultados": task["data"]}
+
+@router.post("/cancel/{task_id}")
+async def cancel_campana_task(
+    task_id: str,
+    audit_db: B2CDBSession,
+    current_user_email: CurrentUserEmail
+):
+    """
+    Intenta cancelar una tarea en ejecución o limpia una tarea completada/errónea.
+    """
+    task = tasks_db.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
+    
+    status = task.get("status")
+
+    if status == "running":
+        tasks_db[task_id]["status"] = "cancelled"
+        logger.info(f"Cancelación solicitada para la tarea {task_id} por {current_user_email}.")
+        
+        # Auditoría de cancelación
+        try:
+            db_users.registrar_accion_db(audit_db, current_user_email, "cancelar_campana", {"task_id": task_id})
+        except Exception as e_audit:
+            logger.error(f"Error al registrar auditoría (cancelar_campana): {e_audit}")
+            
+        return {"status": "cancellation_requested"}
+    
+    if status in ["complete", "error", "cancelled"]:
+        # Si la tarea ya terminó o ya está cancelada, esta llamada la limpia de memoria
+        tasks_db.pop(task_id, None)
+        logger.info(f"Tarea {task_id} (estado: {status}) limpiada de la memoria por {current_user_email}.")
+        return {"status": "cleared"}
+    
+    return {"status": status}

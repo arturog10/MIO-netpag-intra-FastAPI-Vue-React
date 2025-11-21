@@ -1,32 +1,81 @@
 import logging
+import os
 from fastapi import HTTPException
-from app.config import config
+from sqlalchemy import create_engine
+from contextlib import contextmanager
+from app.config import settings, json_config 
 
-# Obtenemos el diccionario de motores (engines)
-engines = config.get("engines", {})
 logger = logging.getLogger(__name__)
 
-def get_db_session(db_key: str):
+# --- 1. FUNCIÓN PARA ESCANEAR CONFIG.JSON ---
+def _extract_db_keys(data) -> set:
     """
-    Generador de dependencia de FastAPI para obtener una sesión
-    de base de datos basada en la db_key.
+    Recorre recursivamente el diccionario de configuración (json_config)
+    y extrae todos los valores únicos de las claves "db_key".
+    """
+    keys = set()
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if k == "db_key" and isinstance(v, str):
+                keys.add(v)
+            else:
+                keys.update(_extract_db_keys(v))
+    elif isinstance(data, list):
+        for item in data:
+            keys.update(_extract_db_keys(item))
+    return keys
+
+# --- 2. INICIALIZACIÓN DINÁMICA DE MOTORES ---
+engines = {}
+
+def initialize_engines():
+    """
+    Crea automáticamente los motores de conexión basados en 
+    los 'db_key' encontrados en config.json.
+    """
+    required_keys = _extract_db_keys(json_config)
     
-    Esto es lo que reemplaza a tu antiguo 'get_db()'.
+    if not required_keys:
+        logger.warning("No se encontraron 'db_key' en config.json. No se crearán conexiones.")
+        return
+
+    logger.info(f"Claves de BD detectadas en config.json: {required_keys}")
+
+    driver = "ODBC+Driver+17+for+SQL+Server"
     
-    Uso en FastAPI:
-        @app.get("/endpoint")
-        def my_endpoint(db: Connection = Depends(lambda: get_db_session("mi_db"))):
-            ...
-    
-    Uso en scripts (como create_admin.py):
-        db_gen = get_db_session("mi_db")
-        db = next(db_gen)
+    for db_key in required_keys:
+        # Busca nombre de DB en variable de entorno o usa el key por defecto
+        env_var_name = f"DB_NAME_{db_key.upper()}"
+        db_name = os.getenv(env_var_name, db_key)
+        
+        connection_string = ""
+        
+        if settings.SQL_USERNAME and settings.SQL_PASSWORD:
+            connection_string = (
+                f"mssql+pyodbc://{settings.SQL_USERNAME}:{settings.SQL_PASSWORD}@"
+                f"{settings.DB_SERVER}/{db_name}?driver={driver}&timeout=600"
+            )
+        else: 
+            connection_string = (
+                f"mssql+pyodbc://@{settings.DB_SERVER}/{db_name}?"
+                f"driver={driver}&trusted_connection=yes&timeout=600"
+            )
+            
         try:
-            # ... operaciones con db ...
-            next(db_gen)  # Ejecuta commit
-        except:
-            db_gen.close()  # Ejecuta rollback
-    """
+            engines[db_key] = {
+                "engine": create_engine(connection_string),
+                "default_schema": "dbo" 
+            }
+            logger.info(f"Motor creado para key '{db_key}' -> DB: '{db_name}'")
+        except Exception as e:
+            logger.error(f"Fallo al crear motor para '{db_key}': {e}")
+
+# Ejecutar inicialización al importar este archivo
+initialize_engines()
+
+
+# --- 3. GENERADOR DE SESIÓN (Para Endpoints) ---
+def get_db_session(db_key: str):
     if db_key not in engines:
         logger.error(f"Se solicitó una clave de DB no configurada: {db_key}")
         raise HTTPException(status_code=500, detail=f"Configuración de DB '{db_key}' no encontrada.")
@@ -38,44 +87,53 @@ def get_db_session(db_key: str):
         logger.error(f"Configuración de motor '{db_key}' no tiene un 'engine' válido.")
         raise HTTPException(status_code=500, detail="Error interno del servidor.")
 
-    # Abre la conexión
     connection = None
     transaction = None
     
     try:
         connection = engine.connect()
         transaction = connection.begin()
-        
-        logger.debug(f"Sesión de DB iniciada para '{db_key}'")
-        
-        # Entrega la conexión al endpoint/script
+        logger.debug(f"Sesión de DB iniciada para '{db_key}' (Endpoint)")
         yield connection
-        
-        # Si llegamos aquí, todo salió bien - hacer commit
         if transaction and transaction.is_active:
             transaction.commit()
             logger.debug(f"Sesión de DB 'commit' para '{db_key}'")
     
     except HTTPException as e_http:
-            # Si el error ya es un HTTPException (como nuestro 409),
-            # hacemos rollback pero VOLVEMOS A LANZAR EL ERROR ORIGINAL (409).
             if transaction and transaction.is_active:
                 transaction.rollback()
-                logger.warning(f"Sesión de DB 'rollback' para '{db_key}' debido a HTTPException: {e_http.detail}")
-            # Re-lanzamos el 409 (o el error HTTP que sea)
             raise e_http
-                    
     except Exception as e:
-        # Si algo falló, hacer rollback
         if transaction and transaction.is_active:
             transaction.rollback()
             logger.error(f"Sesión de DB 'rollback' para '{db_key}' debido a error: {e}")
-        
         logger.error(f"Error en la sesión de DB '{db_key}': {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error de base de datos.")
-        
     finally:
-        # Cerrar la conexión
         if connection:
             connection.close()
             logger.debug(f"Sesión de DB cerrada para '{db_key}'")
+
+
+# --- 4. CONTEXT MANAGER (Para Pipelines) ---
+@contextmanager
+def get_db_session_context(db_key: str):
+    if db_key not in engines:
+         raise Exception(f"Clave de DB no configurada: {db_key}")
+    
+    engine = engines[db_key]["engine"]
+    connection = engine.connect()
+    transaction = connection.begin()
+    
+    try:
+        logger.debug(f"Sesión de DB iniciada para '{db_key}' (Context)")
+        yield connection
+        if transaction.is_active:
+            transaction.commit()
+    except Exception as e:
+        if transaction.is_active:
+            transaction.rollback()
+            logger.error(f"Rollback en contexto '{db_key}': {e}")
+        raise e
+    finally:
+        connection.close()

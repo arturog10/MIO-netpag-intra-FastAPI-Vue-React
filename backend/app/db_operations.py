@@ -1,13 +1,19 @@
 import logging
 import json
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Tuple
+import pandas as pd
+import numpy as np
+
 from sqlalchemy import (
     text, select, func, cast, String, column, Table,
     MetaData, insert, update, delete, Numeric, Date, and_,
     DateTime, Time
 )
+from sqlalchemy.engine import Connection
 from app.config import config
+# Importamos el diccionario de motores dinámicos
+from app.database import engines 
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +36,13 @@ def _get_table_info(table_key: str, client_code: str = None) -> dict:
         raise ValueError(f"Configuración de tabla no encontrada")
 
     db_key = info["db_key"]
-    engine_info = config["engines"].get(db_key)
+    
+    # Usamos los motores inicializados en database.py
+    engine_info = engines.get(db_key)
+    
     if not engine_info:
         logger.error(f"No se encontró motor de DB para la clave: {db_key}")
-        raise ValueError(f"Configuración de motor de DB no encontrada")
+        raise ValueError(f"Configuración de motor de DB no encontrada para '{db_key}'")
 
     return {
         "engine": engine_info["engine"],
@@ -59,63 +68,34 @@ def _get_reflected_table(table_key: str, client_code: str = None) -> Table:
     return tabla
 
 
-# --- NUEVA FUNCIÓN: Convertir fecha a DATE de forma robusta ---
+# --- FUNCIÓN: Convertir fecha a DATE de forma robusta ---
 def _create_robust_date_conversion(col_name: str):
     """
     Crea una expresión SQL que convierte una columna a DATE
     probando múltiples formatos en cascada usando CASE WHEN.
-    
-    Compatible con SQL Server 2008+
     """
     safe_col = column(col_name)
     
-    # Crear expresión SQL cruda (raw SQL) que SQL Server puede entender
-    # Usamos CASE WHEN con ISDATE() para verificar formatos válidos
     sql_expression = text(f"""
         CASE
-            -- Si ya es tipo DATE, usarlo directamente
-            WHEN SQL_VARIANT_PROPERTY([{col_name}], 'BaseType') = 'date' 
-                THEN CAST([{col_name}] AS DATE)
-            
-            -- Formato YYYYMMDD (8 dígitos)
-            WHEN LEN(REPLACE(REPLACE([{col_name}], ';', ''), ' ', '')) = 8 
-                AND ISDATE(LEFT(REPLACE(REPLACE([{col_name}], ';', ''), ' ', ''), 8)) = 1
-                THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([{col_name}], ';', ''), ' ', ''), 8), 112)
-            
-            -- Formato DD/MM/YYYY (103)
-            WHEN CHARINDEX('/', [{ col_name}]) > 0 
-                AND ISDATE(LEFT(REPLACE([{col_name}], ';', ''), 10)) = 1
-                THEN CONVERT(DATE, LEFT(REPLACE([{col_name}], ';', ''), 10), 103)
-            
-            -- Formato DD-MM-YYYY (105)
-            WHEN CHARINDEX('-', [{col_name}]) > 0 
-                AND SUBSTRING([{col_name}], 3, 1) = '-'
-                AND ISDATE(LEFT([{col_name}], 10)) = 1
-                THEN CONVERT(DATE, LEFT([{col_name}], 10), 105)
-            
-            -- Formato ISO YYYY-MM-DD (120 o 126)
-            WHEN CHARINDEX('-', [{col_name}]) > 0 
-                AND SUBSTRING([{col_name}], 5, 1) = '-'
-                AND ISDATE([{col_name}]) = 1
-                THEN CONVERT(DATE, [{col_name}], 120)
-            
-            -- Intento genérico con CONVERT
-            WHEN ISDATE([{col_name}]) = 1
-                THEN CONVERT(DATE, [{col_name}])
-            
+            WHEN SQL_VARIANT_PROPERTY([{col_name}], 'BaseType') = 'date' THEN CAST([{col_name}] AS DATE)
+            WHEN LEN(REPLACE(REPLACE([{col_name}], ';', ''), ' ', '')) = 8 AND ISDATE(LEFT(REPLACE(REPLACE([{col_name}], ';', ''), ' ', ''), 8)) = 1 THEN CONVERT(DATE, LEFT(REPLACE(REPLACE([{col_name}], ';', ''), ' ', ''), 8), 112)
+            WHEN CHARINDEX('/', [{ col_name}]) > 0 AND ISDATE(LEFT(REPLACE([{col_name}], ';', ''), 10)) = 1 THEN CONVERT(DATE, LEFT(REPLACE([{col_name}], ';', ''), 10), 103)
+            WHEN CHARINDEX('-', [{col_name}]) > 0 AND SUBSTRING([{col_name}], 3, 1) = '-' AND ISDATE(LEFT([{col_name}], 10)) = 1 THEN CONVERT(DATE, LEFT([{col_name}], 10), 105)
+            WHEN CHARINDEX('-', [{col_name}]) > 0 AND SUBSTRING([{col_name}], 5, 1) = '-' AND ISDATE([{col_name}]) = 1 THEN CONVERT(DATE, [{col_name}], 120)
+            WHEN ISDATE([{col_name}]) = 1 THEN CONVERT(DATE, [{col_name}])
             ELSE NULL
         END
     """)
-    
     return sql_expression
 
 
-# --- LÓGICA DE FILTROS (MEJORADA) ---
+# --- LÓGICA DE FILTROS (CON DETECCIÓN DE TIPO) ---
 
-def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Table] = None) -> tuple[list, dict]:
+def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Table] = None) -> Tuple[list, dict]:
     """
-    Construye la cláusula WHERE usando objetos de SQLAlchemy (¡PORTABLE!)
-    y prepara los parámetros.
+    Construye la cláusula WHERE usando objetos de SQLAlchemy y detecta
+    si la columna es fecha nativa o texto para aplicar la conversión correcta.
     """
     sql_filters = []
     params = {}
@@ -143,7 +123,6 @@ def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Tab
             val_hasta = filter_info.get("hasta")
 
             if not es_fecha:
-                # Detectar si es numérico
                 try:
                     if val_desde: float(val_desde)
                     elif val_hasta: float(val_hasta)
@@ -151,21 +130,17 @@ def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Tab
                 except (ValueError, TypeError): 
                     is_numeric = False
 
-            # --- MANEJO DE FECHAS ROBUSTO ---
+            # Detección de tipo para fechas
+            is_native_date = False
             if es_fecha:
-                # Usar la expresión SQL cruda directamente
-                is_native_date = False
                 if tabla is not None and col_name in tabla.c:
                     col_type = tabla.c[col_name].type
-                    # Comprobamos si el tipo es nativo de fecha/hora
                     if isinstance(col_type, (Date, DateTime, Time)):
                         is_native_date = True
-
+                
                 if is_native_date:
-                    # SOLUCIÓN BUG: La columna es DATE, usar un CAST simple.
                     sql_expr = cast(safe_col, Date)
                 else:
-                    # REQUISITO: La columna es TEXTO, usar el conversor robusto.
                     sql_expr = _create_robust_date_conversion(col_name)
 
             elif is_numeric:
@@ -173,14 +148,13 @@ def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Tab
             else:
                 sql_expr = cast(safe_col, String(255))
 
-            # Procesar los valores desde/hasta
+            # Procesar valores
             try:
                 if val_desde:
                     param_name = f"desde_{safe_param_name}"
                     clean_val_desde = str(val_desde).strip()[:10]
                     
                     if es_fecha:
-                        # Parsear la fecha del frontend (DD/MM/YYYY o DD-MM-YYYY)
                         valor_param = None
                         for date_format in ['%d/%m/%Y', '%d-%m-%Y']:
                             try:
@@ -190,31 +164,25 @@ def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Tab
                                 continue
                         
                         if valor_param is None:
-                            logger.warning(f"No se pudo parsear la fecha 'desde' para {col_name}: {clean_val_desde}")
+                            logger.warning(f"No se pudo parsear fecha 'desde' para {col_name}: {clean_val_desde}")
                             continue
                         
-                        # --- INICIO DEL ARREGLO ---
                         if is_native_date:
-                            # Si es fecha nativa, usa el objeto CAST directamente
                             sql_filters.append(sql_expr >= text(f":{param_name}"))
                         else:
-                            # Si es texto, usa la conversión robusta .text
                             sql_filters.append(text(f"({sql_expr.text}) >= :{param_name}"))
-                        # --- FIN DEL ARREGLO ---
 
                         params[param_name] = valor_param
-
-                    else: # No es fecha (numérico o texto)
-                        valor_param = val_desde
+                    else:
+                        # Numérico
                         sql_filters.append(sql_expr >= text(f":{param_name}"))
-                        params[param_name] = valor_param
+                        params[param_name] = val_desde
 
                 if val_hasta:
                     param_name = f"hasta_{safe_param_name}"
                     clean_val_hasta = str(val_hasta).strip()[:10]
                     
                     if es_fecha:
-                        # Parsear la fecha del frontend
                         valor_param = None
                         for date_format in ['%d/%m/%Y', '%d-%m-%Y']:
                             try:
@@ -224,28 +192,23 @@ def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Tab
                                 continue
                         
                         if valor_param is None:
-                            logger.warning(f"No se pudo parsear la fecha 'hasta' para {col_name}: {clean_val_hasta}")
+                            logger.warning(f"No se pudo parsear fecha 'hasta' para {col_name}: {clean_val_hasta}")
                             continue
                         
-                        # --- INICIO DEL ARREGLO ---
                         if is_native_date:
-                            # Si es fecha nativa, usa el objeto CAST directamente
                             sql_filters.append(sql_expr <= text(f":{param_name}"))
                         else:
-                            # Si es texto, usa la conversión robusta .text
                             sql_filters.append(text(f"({sql_expr.text}) <= :{param_name}"))
-                        # --- FIN DEL ARREGLO ---
                         
                         params[param_name] = valor_param
-                        
-                    else: # No es fecha
-                        valor_param = val_hasta
+                    else:
+                        # Numérico
                         sql_filters.append(sql_expr <= text(f":{param_name}"))
-                        params[param_name] = valor_param
+                        params[param_name] = val_hasta
                     
             except (ValueError, TypeError) as e:
                 if es_fecha: 
-                    logger.warning(f"Formato de fecha inválido para {col_name}: {e}. Se ignora este filtro.")
+                    logger.warning(f"Formato inválido para {col_name}: {e}")
                 pass
             continue
 
@@ -283,7 +246,7 @@ def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Tab
     return sql_filters, params
 
 
-# --- OPERACIONES DE DATOS ---
+# --- OPERACIONES DE DATOS (VISOR) ---
 
 def contar_datos_cliente(db_session, client_code: str, filtros: Optional[dict] = None) -> int:
     try:
@@ -296,7 +259,6 @@ def contar_datos_cliente(db_session, client_code: str, filtros: Optional[dict] =
 
         result = db_session.execute(stmt, params).scalar_one_or_none()
         return result or 0
-
     except Exception as e:
         logger.error(f"Error al CONTAR datos para '{client_code}': {e}", exc_info=True)
         raise e
@@ -310,7 +272,7 @@ def obtener_datos_cliente(db_session, client_code: str, filtros: Optional[dict] 
         if sql_filters:
             stmt = stmt.where(and_(*sql_filters))
 
-        # --- LÓGICA DE ORDENAMIENTO ---
+        # Ordenamiento
         order_expression = None
         if sort_field and sort_order is not None and sort_field in tabla.c:
             logger.info(f"Aplicando orden: {sort_field} {sort_order}")
@@ -320,11 +282,8 @@ def obtener_datos_cliente(db_session, client_code: str, filtros: Optional[dict] 
             else:
                 order_expression = sort_col.asc()
         else:
-            logger.info("Aplicando orden por defecto (columna 1)")
             if len(tabla.c) > 0:
                  order_expression = tabla.c[0]
-            else:
-                 logger.warning(f"La tabla '{tabla.name}' no tiene columnas.")
 
         if order_expression is not None:
              stmt = stmt.order_by(order_expression)
@@ -333,13 +292,12 @@ def obtener_datos_cliente(db_session, client_code: str, filtros: Optional[dict] 
         offset_val = (page - 1) * items_per_page
         stmt = stmt.offset(offset_val).limit(items_per_page)
 
-        logger.info(f"Ejecutando consulta (paginada) con params: {params}")
+        logger.info(f"Ejecutando consulta con params: {params}")
         result = db_session.execute(stmt, params)
         column_names = list(result.keys())
         rows_as_dicts = [dict(zip(column_names, row)) for row in result.fetchall()]
 
         return column_names, rows_as_dicts
-
     except Exception as e:
         logger.error(f"Error al OBTENER datos para '{client_code}': {e}", exc_info=True)
         raise e
@@ -347,7 +305,7 @@ def obtener_datos_cliente(db_session, client_code: str, filtros: Optional[dict] 
 def obtener_todos_los_datos_filtrados(db_session, client_code: str, filtros: Optional[dict] = None):
     try:
         tabla = _get_reflected_table("cliente_table_map", client_code)
-        sql_filters, params = construir_where_dinamico(filtros,tabla)
+        sql_filters, params = construir_where_dinamico(filtros, tabla)
 
         stmt = select(tabla)
         if sql_filters:
@@ -362,14 +320,12 @@ def obtener_todos_los_datos_filtrados(db_session, client_code: str, filtros: Opt
         rows_as_dicts = [dict(zip(column_names, row)) for row in result.fetchall()]
 
         return column_names, rows_as_dicts
-
     except Exception as e:
         logger.error(f"Error al OBTENER TODOS los datos para '{client_code}': {e}", exc_info=True)
         raise e
 
 
 # --- OPERACIONES DE ESTRATEGIAS ---
-# (Sin cambios - las funciones siguen igual)
 
 def estrategia_existe_db(db_session, nombre: str, cliente: str) -> bool:
     try:
@@ -384,52 +340,38 @@ def estrategia_existe_db(db_session, nombre: str, cliente: str) -> bool:
         logger.error(f"Error al CHEQUEAR estrategia '{nombre}': {e}", exc_info=True)
         raise e
 
-def guardar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, filtro_columnas: str, filtros_aplicados: str, orden_estado: Optional[str] = None, id_usuario_creador: Optional[int] = None, usuario_creador: Optional[str] = None) -> bool:
+def guardar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, filtro_columnas: str, filtros_aplicados: str, orden_estado: Optional[str] = None) -> bool:
     try:
         tabla = _get_reflected_table("tabla_estrategias")
-        valores = {
-            "nombre_estrategia": nombre, 
-            "codigo_cliente": cliente,
-            "columnas_visibles": columnas, 
-            "filtro_columnas": filtro_columnas,
-            "filtros_aplicados": filtros_aplicados,
-            "orden_estado": orden_estado,
-            "id_usuario_creador": id_usuario_creador, # <-- AÑADIDO
-            "usuario_creador": usuario_creador,       # <-- AÑADIDO            
-        }
-
-        stmt = insert(tabla).values(**valores)
-
+        stmt = insert(tabla).values(
+            nombre_estrategia=nombre, codigo_cliente=cliente,
+            columnas_visibles=columnas, filtro_columnas=filtro_columnas,
+            filtros_aplicados=filtros_aplicados,
+            orden_estado = orden_estado
+        )
         db_session.execute(stmt)
-        logger.info(f"Estrategia '{nombre}' guardada por usuario {usuario_creador} (ID {id_usuario_creador}).")        
+        logger.info(f"Estrategia '{nombre}' guardada con éxito.")
         return True
     except Exception as e:
         logger.error(f"Error al GUARDAR la estrategia '{nombre}': {e}", exc_info=True)
         raise e
 
-def actualizar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, filtro_columnas: str, filtros_aplicados: str, orden_estado: Optional[str] = None, id_usuario_creador: Optional[int] = None, usuario_creador: Optional[str] = None) -> bool:
+def actualizar_estrategia_db(db_session, nombre: str, cliente: str, columnas: str, filtro_columnas: str, filtros_aplicados: str, orden_estado: Optional[str] = None) -> bool:
     try:
         tabla = _get_reflected_table("tabla_estrategias")
-
-        valores = {
-            "columnas_visibles": columnas, 
-            "filtro_columnas": filtro_columnas,
-            "filtros_aplicados": filtros_aplicados,
-            "orden_estado": orden_estado,
-            "id_usuario_creador": id_usuario_creador, # <-- AÑADIDO
-            "usuario_creador": usuario_creador        # <-- AÑADIDO
-        }
-
         stmt = update(tabla).where(
             tabla.c.nombre_estrategia == nombre,
             tabla.c.codigo_cliente == cliente
-        ).values(**valores)
-
+        ).values(
+            columnas_visibles=columnas, filtro_columnas=filtro_columnas,
+            filtros_aplicados=filtros_aplicados,
+            orden_estado=orden_estado
+        )
         result = db_session.execute(stmt)
         if result.rowcount == 0:
             logger.warning(f"Se intentó actualizar la estrategia '{nombre}', pero no se encontró.")
             return False
-        logger.info(f"Estrategia '{nombre}' actualizada por usuario {usuario_creador} (ID {id_usuario_creador}).")
+        logger.info(f"Estrategia '{nombre}' actualizada con éxito.")
         return True
     except Exception as e:
         logger.error(f"Error al ACTUALIZAR la estrategia '{nombre}': {e}", exc_info=True)
@@ -453,8 +395,8 @@ def cargar_una_estrategia_db(db_session, id_estrategia: int) -> Optional[dict]:
     try:
         tabla = _get_reflected_table("tabla_estrategias")
         stmt = select(
-            tabla.c.codigo_cliente,   
-            tabla.c.nombre_estrategia, 
+            tabla.c.codigo_cliente, 
+            tabla.c.nombre_estrategia,
             tabla.c.columnas_visibles,
             tabla.c.filtros_aplicados,
             tabla.c.orden_estado
@@ -472,19 +414,15 @@ def cargar_una_estrategia_db(db_session, id_estrategia: int) -> Optional[dict]:
 
 # --- LISTA NEGRA ---
 
-def obtener_columnas_listanegra(db_session, listanegra_key: str) -> list[str]:
-    """
-    Obtiene solo los nombres de las columnas de lista negra.
-    Útil para poblar los filtros en el frontend.
-    """
+def obtener_columnas_listanegra(db_session) -> list[str]:
     try:
-        tabla = _get_reflected_table("listanegra_table_map", listanegra_key)
+        tabla = _get_reflected_table("listanegra_table_map", "Lista Principal")
         return [c.name for c in tabla.columns]
     except Exception as e:
         logger.error(f"No se pudo obtener la estructura de lista_negra. Error: {e}")
         raise e
 
-def contar_datos_listanegra(db_session, listanegra_key: str, filtros: Optional[dict] = None) -> int:
+def contar_datos_listanegra(db_session, listanegra_key: str = "Lista Principal", filtros: Optional[dict] = None) -> int:
     try:
         tabla = _get_reflected_table("listanegra_table_map", listanegra_key)
         sql_filters, params = construir_where_dinamico(filtros, tabla)
@@ -496,11 +434,7 @@ def contar_datos_listanegra(db_session, listanegra_key: str, filtros: Optional[d
         logger.error(f"Error al CONTAR datos de lista_negra: {e}", exc_info=True)
         raise e
 
-def obtener_datos_listanegra(db_session, listanegra_key: str, filtros: Optional[dict] = None, page: int = 1, items_per_page: int = 15, sort_field: Optional[str] = None, sort_order: Optional[int] = None):
-    """
-    Obtiene los datos paginados y ordenados de Lista Negra.
-    (Versión mejorada)
-    """
+def obtener_datos_listanegra(db_session, listanegra_key: str = "Lista Principal", filtros: Optional[dict] = None, page: int = 1, items_per_page: int = 15, sort_field: Optional[str] = None, sort_order: Optional[int] = None):
     try:
         tabla = _get_reflected_table("listanegra_table_map", listanegra_key)
         sql_filters, params = construir_where_dinamico(filtros, tabla)
@@ -509,23 +443,20 @@ def obtener_datos_listanegra(db_session, listanegra_key: str, filtros: Optional[
         if sql_filters:
             stmt = stmt.where(and_(*sql_filters))
 
-        # --- LÓGICA DE ORDENAMIENTO (Igual que en el Visor) ---
         order_expression = None
         if sort_field and sort_order is not None and sort_field in tabla.c:
-            logger.info(f"Aplicando orden: {sort_field} {sort_order}")
             sort_col = tabla.c[sort_field]
-            if sort_order == -1: # Asumimos -1 para DESC
+            if sort_order == -1: 
                 order_expression = sort_col.desc()
-            else: # Asumimos 1 o cualquier otro valor para ASC
+            else: 
                 order_expression = sort_col.asc()
         else:
             if len(tabla.c) > 0:
-                 order_expression = tabla.c[0] # Orden por defecto
+                 order_expression = tabla.c[0] 
 
         if order_expression is not None:
              stmt = stmt.order_by(order_expression)
 
-        # Paginación
         offset_val = (page - 1) * items_per_page
         stmt = stmt.offset(offset_val).limit(items_per_page)
 
@@ -534,18 +465,12 @@ def obtener_datos_listanegra(db_session, listanegra_key: str, filtros: Optional[
         column_names = list(result.keys())
         rows_as_dicts = [dict(zip(column_names, row)) for row in result.fetchall()]
 
-        # Devuelve las columnas y las filas, igual que obtener_datos_cliente
         return column_names, rows_as_dicts
-
     except Exception as e:
         logger.error(f"Error al OBTENER datos de lista_negra: {e}", exc_info=True)
         raise e
 
-def obtener_todos_los_datos_listanegra(db_session, listanegra_key: str, filtros: Optional[dict] = None, sort_field: Optional[str]= None, sort_order: Optional[int] = None) -> tuple[list[str], list[dict]]:
-    """
-    Obtiene TODOS los datos filtrados de Lista Negra para exportar.
-    (Versión mejorada)
-    """
+def obtener_todos_los_datos_listanegra(db_session, listanegra_key: str = "Lista Principal", filtros: Optional[dict] = None, sort_field: Optional[str]= None, sort_order: Optional[int] = None) -> tuple[list[str], list[dict]]:
     try:
         tabla = _get_reflected_table("listanegra_table_map", listanegra_key)
         sql_filters, params = construir_where_dinamico(filtros, tabla)
@@ -554,7 +479,6 @@ def obtener_todos_los_datos_listanegra(db_session, listanegra_key: str, filtros:
         if sql_filters:
             stmt = stmt.where(and_(*sql_filters))
 
-        # --- LÓGICA DE ORDENAMIENTO (Igual que en el Visor) ---
         order_expression = None
         if sort_field and sort_order is not None and sort_field in tabla.c:
             sort_col = tabla.c[sort_field]
@@ -575,8 +499,38 @@ def obtener_todos_los_datos_listanegra(db_session, listanegra_key: str, filtros:
         rows_as_dicts = [dict(row._mapping) for row in result.fetchall()]
         
         return column_names, rows_as_dicts
-        
     except Exception as e:
         logger.error(f"Error al EXPORTAR datos de lista_negra: {e}", exc_info=True)
         raise e
 
+# --- CARGAR LISTA NEGRA A PANDAS ---
+def obtener_lista_negra_completa(db_session: Connection, listanegra_key: str = "Lista Principal") -> pd.DataFrame:
+    logger.info(f"Obteniendo tabla completa de lista negra: {listanegra_key}")
+    try:
+        tabla = _get_reflected_table("listanegra_table_map", listanegra_key)
+        
+        # Usar mayúsculas para coincidir con la BD
+        stmt = select(
+            tabla.c.RUT, 
+            tabla.c.FONO, 
+            tabla.c.EMAIL, 
+            tabla.c.CLIENTE
+        )
+        
+        result = db_session.execute(stmt).fetchall()
+        df = pd.DataFrame(result, columns=["rut", "fono", "email", "cliente"])
+        
+        # Normalizar
+        df['rut'] = df['rut'].astype(str).str.strip()
+        df['fono'] = df['fono'].astype(str).str.strip().replace(r'\.0$', '', regex=True)
+        df['email'] = df['email'].astype(str).str.lower().str.strip()
+        
+        # Añadimos '0' a la lista de valores nulos
+        df.replace(['nan', 'None', 'NaT', '', '0'], np.nan, inplace=True)
+        
+        logger.info(f"Lista negra cargada en memoria con {len(df)} registros.")
+        return df
+        
+    except Exception as e:
+        logger.error(f"Error al obtener lista negra completa: {e}", exc_info=True)
+        raise e

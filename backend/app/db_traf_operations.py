@@ -50,12 +50,16 @@ def get_traf_data(db_session: Connection, sufijo: str, filtros: dict, columnas: 
         cols_to_select = [column(c.strip()) for c in columnas]
 
         # 2. Usamos el helper estándar de tu proyecto
-        where_clauses, params = construir_where_dinamico(filtros, tabla)
+        where_clauses, params = construir_where_dinamico(filtros)
         
         # 3. Construimos la consulta seleccionando las columnas explícitas
         stmt = select(*cols_to_select).select_from(tabla)
         
-        # 4. (¡ESTA ES LA CORRECCIÓN!) Usamos 'and_()' para aplicar los filtros
+        # --- NUEVO: Añadir NOLOCK para evitar bloqueos en lecturas masivas ---
+        stmt = stmt.with_hint(tabla, 'WITH (NOLOCK)')
+        # -------------------------------------------------------------------
+        
+        # 4. Aplicar filtros
         if where_clauses:
             stmt = stmt.where(and_(*where_clauses))
 
@@ -63,7 +67,7 @@ def get_traf_data(db_session: Connection, sufijo: str, filtros: dict, columnas: 
         if len(tabla.c) > 0:
              stmt = stmt.order_by(tabla.c[0])
 
-        logger.info(f"Ejecutando consulta en la vista TRAF: {stmt} con parámetros: {params}")
+        logger.info(f"Ejecutando consulta en la vista TRAF (NOLOCK): {stmt} con parámetros: {params}")
         
         # Ejecutamos la consulta en la sesión que nos pasó el router
         result = db_session.execute(stmt, params)
