@@ -133,7 +133,7 @@ async def ejecutar_campana(
 ):
     """Inicia la ejecución asíncrona de un pipeline de campaña."""
     task_id = str(uuid.uuid4())
-    tasks_db[task_id] = {"status": "running", "data": None}
+    tasks_db[task_id] = {"status": "running", "data": None, "user": current_user_email}
     
     db_key_b2c = "b2c" 
     

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Routes, Route, Outlet, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext.jsx';
+import { Toast } from 'primereact/toast';
 
 // Importa tus componentes
 import Navbar from './components/Navbar';
@@ -13,6 +14,7 @@ import TrazabilidadPage from './pages/TrazabilidadPage.jsx';
 import ListaNegraPage from './pages/ListaNegraPage.jsx';
 import GeneradorCampanasPage from './pages/GeneradorCampanasPage.jsx';
 import ReportesPage from './pages/reportesPage.jsx';
+
 
 
 // Componente de Layout (Sin cambios)
@@ -44,8 +46,24 @@ function ProtectedRoute() {
 function App() {
   // --- CAMBIO ---
   // Obtenemos 'isAuthenticated' (en lugar de 'user') y el nuevo 'isLoading'
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, sessionAlert, setSessionAlert } = useAuth();
+  const toast = useRef(null);
 
+  // Efecto para mostrar las alertas de sesión
+    useEffect(() => {
+        if (sessionAlert && toast.current) {
+            toast.current.show({
+                severity: sessionAlert.type === 'error' ? 'error' : 'warn',
+                summary: sessionAlert.type === 'error' ? 'Sesión Expirada' : 'Advertencia de Sesión',
+                detail: sessionAlert.msg,
+                life: 5000, // 5 segundos
+                sticky: sessionAlert.type === 'error' // Si es error (expiró), se queda pegado
+            });
+            // Limpiamos la alerta del estado para que no se repita infinitamente
+            // pero dejamos el toast visible el tiempo configurado
+            setTimeout(() => setSessionAlert(null), 500); 
+        }
+    }, [sessionAlert, setSessionAlert]);
   // --- CAMBIO ---
   // 1. Manejar el estado de carga
   // Mientras el AuthContext verifica el token, mostramos un loader.
@@ -60,6 +78,9 @@ function App() {
 
   // 2. Una vez que 'isLoading' es false, renderizamos las rutas
   return (
+    <>
+    {/* Toast Global para alertas de sesión */}
+    <Toast ref={toast} position="top-center" />
     <Routes>
       {/* --- RUTAS PÚBLICAS --- */}
       {/* Si el usuario ya está logueado y visita /login, redirige al inicio */}
@@ -107,6 +128,7 @@ function App() {
         <Route path="*" element={<PlaceholderPage title="404 - Página No Encontrada" />} />
       </Route>
     </Routes>
+    </>
   );
 }
 export default App;

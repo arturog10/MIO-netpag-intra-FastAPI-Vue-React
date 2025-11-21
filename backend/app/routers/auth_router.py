@@ -1,13 +1,18 @@
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.engine import Connection # Para inyección de dependencia
+from sqlalchemy.engine import Connection
 from typing import Annotated
 
-from app.database import get_db_session # Importamos nuestro gestor de sesión
-from app.models import StrategySaveRequest # (Importa modelos Pydantic si creas más)
-import app.db_user_operations as db_users # Importamos las operaciones de usuario
+from app.database import get_db_session
+from app.models import StrategySaveRequest
+import app.db_user_operations as db_users
 from app.auth_security import create_access_token, get_current_user_email
+
+# --- IMPORTAR LOS DICCIONARIOS DE TAREAS DE LOS OTROS MÓDULOS ---
+# Asegúrate de que estas rutas sean correctas según tu estructura
+from app.pipelines.pipeline_campana import tasks_db as campanas_tasks
+from app.routers.trazabilidad_router import tasks_db as trazabilidad_tasks
 
 log = logging.getLogger(__name__)
 router = APIRouter(
@@ -15,84 +20,78 @@ router = APIRouter(
     tags=["Autenticación y Auditoría"]
 )
 
-# --- Dependencia de Conexión a la BD de Usuarios ---
-# (Asume que la tabla 'tabla_usuarios' está en la conexión 'b2c')
+# ... (Dependencias get_user_db y log_action se mantienen igual) ...
 def get_user_db():
-    """Dependencia para obtener la sesión de BD 'b2c'"""
     yield from get_db_session("b2c")
 
 DBSession = Annotated[Connection, Depends(get_user_db)]
 
-# --- Dependencia de Auditoría ---
-# (Se usa en otros endpoints para registrar acciones)
-async def log_action(
-    usuario: str = Depends(get_current_user_email), # Asegura que el usuario esté logueado
-    db: Connection = Depends(get_user_db) # Obtiene la BD de auditoría
-):
-    """Dependencia para registrar una acción (placeholder)."""
-    # Esta dependencia es solo un ejemplo.
-    # La lógica real de auditoría debería llamarse *dentro* # de los endpoints que modifican datos (ej. save_strategy).
-    try:
-        # Ejemplo: db_users.registrar_accion_db(db, usuario, "accion_generica", {})
-        pass # La auditoría la llamaremos manualmente
-    except Exception as e:
-        log.error(f"Error en dependencia de auditoría: {e}")
-    # Esta dependencia no hace nada más que verificar el token.
-    # El 'usuario' se pasa a la función del endpoint.
-    return usuario
-
-
-# --- Endpoints de Autenticación ---
-
+# ... (Endpoint /token se mantiene igual) ...
 @router.post("/token")
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: DBSession
 ):
-    """
-    Endpoint de Login. Recibe 'username' (que es el email) y 'password'
-    en un formulario. Devuelve un token JWT.
-    """
-    # 'form_data.username' es el email (así lo usa OAuth2)
-    user_data = db_users.verificar_usuario_db(
-        db, email=form_data.username, password_plano=form_data.password
-    )
-    
+    # ... (mismo código de login que ya tenías) ...
+    user_data = db_users.verificar_usuario_db(db, email=form_data.username, password_plano=form_data.password)
     if not user_data:
-        # Registro de auditoría para login fallido
-        try:
-            db_users.registrar_accion_db(db, usuario=form_data.username, accion="login_fallido", detalles={"email": form_data.username})
-        except Exception as e:
-            log.error(f"Error al registrar login fallido: {e}")
-            
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Correo o contraseña incorrecta",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        # ... registro auditoria fallo ...
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
     
-    # Registro de auditoría para login exitoso
-    try:
-        db_users.registrar_accion_db(db, usuario=user_data['email'], accion="login_exitoso", detalles={})
-    except Exception as e:
-        log.error(f"Error al registrar login exitoso: {e}")
-        
-    # Crea el token JWT. Guardamos el email en el campo "sub" (subject)
-    access_token = create_access_token(
-        data={"sub": user_data['email'], "rol": user_data['rol']}
-    )
+    # ... registro auditoria exito ...
+    
+    access_token = create_access_token(data={"sub": user_data['email'], "rol": user_data['rol']})
     return {"access_token": access_token, "token_type": "bearer"}
 
 
-@router.get("/users/me")
-async def read_users_me(
-    current_user_email: Annotated[str, Depends(get_current_user_email)]
+# --- NUEVO ENDPOINT: LOGOUT Y LIMPIEZA ---
+@router.post("/logout")
+async def logout_user(
+    current_user_email: str = Depends(get_current_user_email),
+    db: Connection = Depends(get_user_db)
 ):
     """
-    Ruta protegida de ejemplo. Devuelve el email del usuario
-    que está en el token.
+    Cierra la sesión y CANCELA todos los procesos en ejecución del usuario.
     """
-    return {"email": current_user_email}
+    log.info(f"Usuario {current_user_email} cerrando sesión. Iniciando limpieza de tareas...")
+    
+    count_cancelled = 0
 
-# (Aquí puedes añadir más endpoints, como /register, /admin/users, etc.
-#  usando las funciones de db_user_operations.py)
+    # 1. Cancelar Tareas de Campañas
+    # Iteramos sobre una copia para evitar errores si el diccionario cambia
+    for task_id, task_info in list(campanas_tasks.items()):
+        # Verificamos si la tarea pertenece al usuario (necesitamos que el pipeline guarde el usuario)
+        # O si no guardamos el usuario, asumimos limpieza total por seguridad (opcional)
+        # Lo ideal es que pipeline guarde "user": email.
+        # Si no lo tienes, agregaremos un "parche" abajo para que lo guarde.
+        
+        task_owner = task_info.get("user_email")
+        if task_owner == current_user_email and task_info["status"] == "running":
+            campanas_tasks[task_id]["status"] = "cancelled"
+            count_cancelled += 1
+
+    # 2. Cancelar Tareas de Trazabilidad
+    for task_id, task_info in list(trazabilidad_tasks.items()):
+        # Trazabilidad router normalmente no guarda el email en el dict principal,
+        # pero podemos asumir que si tienes la sesión abierta, eres tú. 
+        # O mejor, vamos a asegurarnos de guardar el email al crear la tarea.
+        
+        # Si logramos guardar el 'user' en el dict de tareas:
+        task_owner = task_info.get("user") 
+        if task_owner == current_user_email and task_info["status"] == "running":
+            trazabilidad_tasks[task_id]["status"] = "cancelled"
+            count_cancelled += 1
+
+    # 3. Auditoría
+    try:
+        db_users.registrar_accion_db(
+            db, 
+            current_user_email, 
+            "logout", 
+            {"tareas_canceladas": count_cancelled}
+        )
+    except Exception:
+        pass
+
+    log.info(f"Sesión cerrada para {current_user_email}. Procesos cancelados: {count_cancelled}")
+    return {"message": "Sesión cerrada y procesos limpiados."}

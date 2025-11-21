@@ -141,7 +141,7 @@ async def start_trazabilidad_query(
     current_user_email: CurrentUserEmail
 ):
     task_id = str(uuid.uuid4())
-    tasks_db[task_id] = {"status": "running", "data": None}
+    tasks_db[task_id] = {"status": "running","user": current_user_email}
 
     try:
         filtros_log = req.filtros.copy()

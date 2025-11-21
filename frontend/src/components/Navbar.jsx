@@ -48,13 +48,16 @@ function Navbar() {
           <NavLink to="/ListaNegra_Page" className={({isActive}) => isActive ? activeClass : inactiveClass}>
             Lista Negra
           </NavLink>
-          {/* <NavLink to="/campanas" className={({isActive}) => isActive ? activeClass : inactiveClass}>
-            Campañas
-          </NavLink>       */}
+
+          {user.rol === 'admin' && (
+            <NavLink to="/campanas" className={({isActive}) => isActive ? activeClass : inactiveClass}>
+              Campañas
+            </NavLink>  
+          )}
+            
           <NavLink to="/reportes" className={({isActive}) => isActive ? activeClass : inactiveClass}>
             Reportes
           </NavLink>    
-
           {/* --- CAMBIO: Verificación segura del rol --- */}
           {/* 'user' aquí nunca será 'null' gracias al 'isAuthenticated' de arriba */}
           {user.rol === 'admin' && (
