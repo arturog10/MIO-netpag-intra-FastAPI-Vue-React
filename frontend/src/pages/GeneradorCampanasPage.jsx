@@ -14,7 +14,7 @@ import { Column } from 'primereact/column';
 import { ProgressSpinner } from 'primereact/progressspinner';
 
 // --- Estilos ---
-import { selectClass, inputClass, btnPrimary, btnSecondary } from '../styles/appStyles';
+import { selectClass, inputClass, btnPrimary, btnSecondary, btnDanger } from '../styles/appStyles';
 
 // --- Configuración API ---
 const API_VISOR_URL = '/api/visor';
@@ -27,7 +27,7 @@ const tiposCampanaOptions = [
 ];
 
 function GeneradorCampanasPage() {
-    const { token, user } = useAuth();
+    const { token, user } = useAuth(); // Obtener usuario para permisos
     const toast = useRef(null);
 
     // --- ESTADOS DE UI ---
@@ -64,7 +64,9 @@ function GeneradorCampanasPage() {
 
     // --- ESTADOS DE LISTA ---
     const [plantillasGuardadas, setPlantillasGuardadas] = useState([]);
-
+    
+    // Determinar si es admin
+    const isAdmin = user?.rol === 'admin';
 
     // ========================================================================
     // 1. CARGA INICIAL Y LISTAS
@@ -101,7 +103,6 @@ function GeneradorCampanasPage() {
             setEstrategiasDisponibles([]);
             return;
         }
-        // Evitar recarga si estamos editando y ya tenemos datos (para no borrar selección)
         if (isEditing && estrategiasDisponibles.length > 0) return;
 
         const fetchEstrategias = async () => {
@@ -184,7 +185,7 @@ function GeneradorCampanasPage() {
             // 5. Setear la estrategia seleccionada
             setSelectedEstrategia(plantilla.id_estrategia_base);
 
-            // 6. Cargar Configuración
+            // 6. Cargar Configuración (Tipo de Campaña)
             try {
                 const val = JSON.parse(plantilla.reglas_validacion_json || "{}");
                 if (val.tipo_campana) {
@@ -192,6 +193,7 @@ function GeneradorCampanasPage() {
                 }
             } catch (e) { console.error("Error parsing validacion json", e); }
 
+            // 7. Cargar División
             try {
                 const proc = JSON.parse(plantilla.reglas_procesamiento_json || "{}");
                 setColumnasDivision(proc.columnas_division || []); 
@@ -209,18 +211,18 @@ function GeneradorCampanasPage() {
     };
 
     const handleGuardar = async () => {
-        if (!nombrePlantilla || !selectedEstrategia || columnasDivision.length === 0 || !tipoCampana) {
-            toast.current.show({ severity: 'warn', summary: 'Faltan datos', detail: 'Complete nombre, estrategia, tipo y columna de división.' });
+        if (!nombrePlantilla || !selectedEstrategia || !tipoCampana) {
+            toast.current.show({ severity: 'warn', summary: 'Faltan datos', detail: 'Complete al menos Nombre, Estrategia y Tipo de Campaña.' });
             return;
         }
 
         const payload = {
             nombre_plantilla: nombrePlantilla,
             id_estrategia_base: selectedEstrategia,
-            // Guardamos el tipo dentro del JSON de validación
+            // Guardamos solo el tipo. El backend deduce las reglas automáticas.
             reglas_validacion_json: JSON.stringify({ tipo_campana: tipoCampana }),
             reglas_procesamiento_json: JSON.stringify({
-                columnas_division: columnasDivision,
+                columnas_division: columnasDivision, // Puede estar vacío
                 reglas_por_grupo: {} 
             }),
             modo_salida: modoSalida
@@ -238,7 +240,8 @@ function GeneradorCampanasPage() {
             setActiveIndex(0);
         } catch (error) {
             console.error(error);
-            toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo guardar.' });
+            const errorMsg = error.response?.data?.detail || 'No se pudo guardar.';
+            toast.current.show({ severity: 'error', summary: 'Error', detail: errorMsg });
         }
     };
 
@@ -303,6 +306,26 @@ function GeneradorCampanasPage() {
         if (pollerRef.current) { clearInterval(pollerRef.current); pollerRef.current = null; }
     };
 
+    const handleCancel = async () => {
+        if (!executingTaskId) return;
+        stopPolling(); 
+        setExecutionStatus("cancelled"); 
+        toast.current.show({ severity: 'warn', summary: 'Cancelando...', detail: 'Enviando solicitud...' });
+
+        try {
+            await axios.post(`${API_CAMPANAS_URL}/cancel/${executingTaskId}`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            toast.current.show({ severity: 'info', summary: 'Tarea Cancelada', detail: 'El proceso se detuvo.' });
+        } catch (error) {
+            console.error("Error al cancelar:", error);
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo cancelar la tarea.' });
+        } finally {
+            setExecutingTaskId(null);
+            setExecutionStatus(null); 
+        }
+    };
+
     // --- HELPERS DE RENDER ---
     const formatDate = (dateString) => {
         if (!dateString) return "-";
@@ -319,31 +342,38 @@ function GeneradorCampanasPage() {
             <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded text-sm text-blue-800">
                 <strong className="block mb-1"><i className="pi pi-info-circle mr-2"></i>Validaciones Automáticas:</strong>
                 <ul className="list-disc pl-5 space-y-1">
-                    <li>Eliminación de duplicados (RUT, Email, Teléfono) si existen las columnas.</li>
+                    <li>Eliminación de duplicados (RUT, Email, Teléfono) si las columnas existen.</li>
                     <li>Cruce con reglas de negocio (Inhibición SQL) para <strong>{tipoCampana}</strong>.</li>
-                    {tipoCampana === 'SMS' && <li>Validación estricta de formato teléfono y largo de mensaje.</li>}
-                    {tipoCampana !== 'SMS' && <li>Normalización de teléfonos (agregando '56' si falta).</li>}
+                    <li>Rechazo de registros gestionados el mismo día.</li>
+                    {tipoCampana === 'SMS' && <li>Validación estricta de formato teléfono y largo de mensaje (160).</li>}
+                    {tipoCampana !== 'SMS' && <li>Consolidación de correos (mail1-6) y normalización de teléfonos (agrega '56').</li>}
                 </ul>
             </div>
         );
     };
 
-    // Determinar si es admin
-    const isAdmin = user?.rol === 'admin';
     return (
         <div className="w-full card">
             <Toast ref={toast} />
             <h1 className="text-2xl font-bold mb-4 text-gray-800">Generador de Campañas</h1>
 
             {/* SECCIÓN DE EJECUCIÓN ACTIVA */}
-            {(executionStatus === 'running' || executionStatus === 'complete') && (
-                <div className="mb-6 p-4 border border-blue-200 bg-blue-50 rounded-lg shadow-sm">
-                    <h3 className="font-bold text-lg mb-3 text-blue-900">Estado de Ejecución</h3>
+            {(executionStatus === 'running' || executionStatus === 'complete' || executionStatus === 'error') && (
+                <div className={`mb-6 p-4 border rounded-lg shadow-sm ${executionStatus === 'running' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
+                    <h3 className="font-bold text-lg mb-3 text-gray-900">Estado de Ejecución</h3>
                     
                     {executionStatus === 'running' && (
-                        <div className="flex items-center gap-3 p-4">
-                            <ProgressSpinner style={{width: '40px', height: '40px'}} strokeWidth="4" />
-                            <span className="text-lg">Procesando validaciones y cruces... Por favor espere.</span>
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4">
+                            <div className="flex items-center gap-3">
+                                <ProgressSpinner style={{width: '40px', height: '40px'}} strokeWidth="4" />
+                                <span className="text-lg">Procesando validaciones y cruces...</span>
+                            </div>
+                            <Button 
+                                label="Cancelar Proceso" 
+                                icon="pi pi-stop-circle" 
+                                className={btnSecondary} // Cambiado a secundario
+                                onClick={handleCancel} 
+                            />
                         </div>
                     )}
 
@@ -397,8 +427,15 @@ function GeneradorCampanasPage() {
                             </ul>
                             
                             <div className="mt-4 flex justify-end">
-                                <Button label="Cerrar y Limpiar" onClick={() => { setExecutionStatus(null); setExecutionStats(null); }} className="p-button-secondary" />
+                                <Button label="Cerrar" onClick={() => { setExecutionStatus(null); setExecutionStats(null); }} className="p-button-secondary" />
                             </div>
+                        </div>
+                    )}
+
+                    {executionStatus === 'error' && (
+                         <div className="flex justify-between items-center">
+                            <div className="text-red-600 font-bold">La tarea falló. Revisa los logs.</div>
+                            <Button label="Cerrar" onClick={() => setExecutionStatus(null)} className="p-button-secondary" />
                         </div>
                     )}
                 </div>
@@ -407,8 +444,7 @@ function GeneradorCampanasPage() {
             <TabView activeIndex={activeIndex} onTabChange={(e) => { setActiveIndex(e.index); if(e.index === 0 && !isEditing) resetForm(); }}>
                 <TabPanel header="Mis Plantillas">
                     <div className="mb-4 flex justify-between">
-                        <Button label="Refrescar Lista" icon="pi pi-refresh" onClick={fetchPlantillas} size="small" className={btnSecondary} />
-                        {/* --- 3. OCULTAR BOTÓN NUEVA PLANTILLA --- */}
+                        <Button label="Refrescar" icon="pi pi-refresh" onClick={fetchPlantillas} size="small" className={btnSecondary} />
                         {isAdmin && (
                             <Button label="Nueva Plantilla" icon="pi pi-plus" onClick={() => { resetForm(); setActiveIndex(1); }} size="small" className={btnPrimary} />
                         )}
@@ -434,79 +470,78 @@ function GeneradorCampanasPage() {
                         )} />
                     </DataTable>
                 </TabPanel>
-                
-                {/* --- 5. OCULTAR PESTAÑA DE EDICIÓN COMPLETA --- */}
+
                 {isAdmin && (
-                <TabPanel header={isEditing ? "Editar Plantilla" : "Nueva Plantilla"}>
-                    <div className="flex flex-col gap-6 max-w-5xl mx-auto">
-                        <div className="flex flex-col gap-2">
-                            <label className="font-bold">Nombre de la Plantilla</label>
-                            <InputText value={nombrePlantilla} onChange={(e) => setNombrePlantilla(e.target.value)} className={inputClass} />
-                        </div>
-
-                        {/* 1. FUENTE */}
-                        <div className="p-5 border border-gray-200 rounded-lg bg-white shadow-sm">
-                            <h3 className="font-bold mb-4 text-blue-800 border-b pb-2">1. Fuente de Datos</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label className="text-sm font-semibold block mb-1">Cliente</label>
-                                    <Dropdown value={selectedCliente} options={clientesDisponibles} onChange={(e) => setSelectedCliente(e.value)} placeholder="Seleccione..." className="w-full" filter />
-                                </div>
-                                <div>
-                                    <label className="text-sm font-semibold block mb-1">Estrategia Base</label>
-                                    <Dropdown value={selectedEstrategia} options={estrategiasDisponibles} onChange={(e) => setSelectedEstrategia(e.value)} placeholder="Seleccione..." className="w-full" disabled={!selectedCliente} filter />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* 2. CONFIGURACIÓN */}
-                        <div className="p-5 border border-gray-200 rounded-lg bg-white shadow-sm">
-                            <h3 className="font-bold mb-4 text-blue-800 border-b pb-2">2. Configuración de Campaña</h3>
-                            <div className="mb-2">
-                                <label className="text-sm font-semibold block mb-2">Tipo de Campaña</label>
-                                <Dropdown 
-                                    value={tipoCampana} 
-                                    options={tiposCampanaOptions} 
-                                    onChange={(e) => setTipoCampana(e.value)} 
-                                    placeholder="Seleccione el tipo..." 
-                                    className="w-full md:w-1/2"
-                                />
-                            </div>
-                            {renderValidationInfo()}
-                        </div>
-
-                        {/* 3. DIVISIÓN */}
-                        <div className="p-5 border border-gray-200 rounded-lg bg-white shadow-sm">
-                            <h3 className="font-bold mb-4 text-blue-800 border-b pb-2">3. División de Archivos</h3>
+                    <TabPanel header={isEditing ? "Editar Plantilla" : "Nueva Plantilla"}>
+                        <div className="flex flex-col gap-6 max-w-5xl mx-auto">
                             <div className="flex flex-col gap-2">
-                                <label className="text-sm font-semibold">Columnas para dividir (Máx 3)</label>
-                                <MultiSelect 
-                                    value={columnasDivision} 
-                                    options={columnasDisponibles} 
-                                    onChange={(e) => setColumnasDivision(e.value)} 
-                                    placeholder="Seleccione hasta 3 columnas..." 
-                                    maxSelectedLabels={3} selectionLimit={3}
-                                    className="w-full" disabled={!selectedEstrategia} display="chip" filter
-                                />
-                                <small className="text-gray-500">El orden de selección define la jerarquía.</small>
+                                <label className="font-bold">Nombre de la Plantilla</label>
+                                <InputText value={nombrePlantilla} onChange={(e) => setNombrePlantilla(e.target.value)} className={inputClass} />
+                            </div>
+
+                            {/* 1. FUENTE */}
+                            <div className="p-5 border border-gray-200 rounded-lg bg-white shadow-sm">
+                                <h3 className="font-bold mb-4 text-blue-800 border-b pb-2">1. Fuente de Datos</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="text-sm font-semibold block mb-1">Cliente</label>
+                                        <Dropdown value={selectedCliente} options={clientesDisponibles} onChange={(e) => setSelectedCliente(e.value)} placeholder="Seleccione..." className="w-full" filter />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm font-semibold block mb-1">Estrategia Base</label>
+                                        <Dropdown value={selectedEstrategia} options={estrategiasDisponibles} onChange={(e) => setSelectedEstrategia(e.value)} placeholder="Seleccione..." className="w-full" disabled={!selectedCliente} filter />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* 2. CONFIGURACIÓN */}
+                            <div className="p-5 border border-gray-200 rounded-lg bg-white shadow-sm">
+                                <h3 className="font-bold mb-4 text-blue-800 border-b pb-2">2. Configuración de Campaña</h3>
+                                <div className="mb-2">
+                                    <label className="text-sm font-semibold block mb-2">Tipo de Campaña</label>
+                                    <Dropdown 
+                                        value={tipoCampana} 
+                                        options={tiposCampanaOptions} 
+                                        onChange={(e) => setTipoCampana(e.value)} 
+                                        placeholder="Seleccione el tipo..." 
+                                        className="w-full md:w-1/2"
+                                    />
+                                </div>
+                                {renderValidationInfo()}
+                            </div>
+
+                            {/* 3. DIVISIÓN */}
+                            <div className="p-5 border border-gray-200 rounded-lg bg-white shadow-sm">
+                                <h3 className="font-bold mb-4 text-blue-800 border-b pb-2">3. División de Archivos</h3>
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-sm font-semibold">Columnas para dividir (Máx 3)</label>
+                                    <MultiSelect 
+                                        value={columnasDivision} 
+                                        options={columnasDisponibles} 
+                                        onChange={(e) => setColumnasDivision(e.value)} 
+                                        placeholder="Seleccione columnas (opcional)..." 
+                                        maxSelectedLabels={3} selectionLimit={3}
+                                        className="w-full" disabled={!selectedEstrategia} display="chip" filter
+                                    />
+                                    <small className="text-gray-500">Si se deja vacío, se generará un solo archivo.</small>
+                                </div>
+                            </div>
+
+                            {/* 4. SALIDA */}
+                            <div className="p-5 border border-gray-200 rounded-lg bg-white shadow-sm">
+                                <h3 className="font-bold mb-4 text-blue-800 border-b pb-2">4. Modo de Salida</h3>
+                                <div className="flex gap-6">
+                                    <div className="flex align-items-center"><input type="radio" id="out1" name="salida" value="archivo" checked={modoSalida === 'archivo'} onChange={(e) => setModoSalida(e.target.value)} className="w-4 h-4" /><label htmlFor="out1" className="ml-2">Generar Archivos Excel</label></div>
+                                    <div className="flex align-items-center"><input type="radio" id="out2" name="salida" value="api" checked={modoSalida === 'api'} onChange={(e) => setModoSalida(e.target.value)} className="w-4 h-4" /><label htmlFor="out2" className="ml-2">Enviar a API</label></div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end mt-6 gap-3 pt-4 border-t">
+                                <Button label="Cancelar" onClick={() => { resetForm(); setActiveIndex(0); }} className={btnSecondary} />
+                                <Button label={isEditing ? "Actualizar" : "Guardar"} icon="pi pi-save" onClick={handleGuardar} className={btnPrimary} disabled={loading} />
                             </div>
                         </div>
-
-                        {/* 4. SALIDA */}
-                        <div className="p-5 border border-gray-200 rounded-lg bg-white shadow-sm">
-                            <h3 className="font-bold mb-4 text-blue-800 border-b pb-2">4. Modo de Salida</h3>
-                            <div className="flex gap-6">
-                                <div className="flex align-items-center"><input type="radio" id="out1" name="salida" value="archivo" checked={modoSalida === 'archivo'} onChange={(e) => setModoSalida(e.target.value)} className="w-4 h-4" /><label htmlFor="out1" className="ml-2">Generar Archivos Excel</label></div>
-                                <div className="flex align-items-center"><input type="radio" id="out2" name="salida" value="api" checked={modoSalida === 'api'} onChange={(e) => setModoSalida(e.target.value)} className="w-4 h-4" /><label htmlFor="out2" className="ml-2">Enviar a API</label></div>
-                            </div>
-                        </div>
-
-                        <div className="flex justify-end mt-6 gap-3 pt-4 border-t">
-                            <Button label="Cancelar" onClick={() => { resetForm(); setActiveIndex(0); }} className={btnSecondary} />
-                            <Button label={isEditing ? "Actualizar" : "Guardar"} icon="pi pi-save" onClick={handleGuardar} className={btnPrimary} disabled={loading} />
-                        </div>
-                    </div>
-                </TabPanel>
+                    </TabPanel>
                 )}
             </TabView>
         </div>
