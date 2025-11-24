@@ -1,197 +1,302 @@
 import logging
-import uuid
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+import os
+import pandas as pd
+import numpy as np
+import zipfile
+import io
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.engine import Connection
-from typing import List, Annotated
+from sqlalchemy import text
+from typing import Annotated
 from pydantic import BaseModel
 
-# Importaciones de nuestro proyecto
-from app.models import PlantillaSaveRequest, PlantillaResponse, GruposUnicosRequest
-from app import db_plantillas_operations as db_plantillas
-from app import db_user_operations as db_users
-from app import db_operations 
-from app.auth_security import get_current_user_email, get_current_admin_user # <-- 1. IMPORTAR ADMIN USER
 from app.database import get_db_session
-
-# Importar la lógica del pipeline
-
+from app.auth_security import get_current_user_email
+from app.db_plantillas_operations import (
+    listar_plantillas_db, 
+    cargar_plantilla_db, 
+    guardar_plantilla_db, 
+    actualizar_plantilla_db
+)
+import app.db_operations as db_ops 
+import app.db_user_operations as db_users # <--- IMPORTANTE: Para registrar auditoría
 from app.pipelines.pipeline_campana import ejecutar_pipeline_campana, tasks_db
-
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/campanas",
-    tags=["Campanas"],
-    # dependencies=[Depends(get_current_user_email)] # <-- QUITAMOS LA DEPENDENCIA GLOBAL (algunas rutas requieren admin)
+    tags=["Campanas"]
 )
 
-# --- Dependencias de DB ---
 def get_b2c_db():
-    yield from get_db_session("b2c") 
+    yield from get_db_session("b2c")
 
-B2CDBSession = Annotated[Connection, Depends(get_b2c_db)]
-CurrentUserEmail = Annotated[str, Depends(get_current_user_email)] 
-CurrentAdminUser = Annotated[str, Depends(get_current_admin_user)] # <-- 2. NUEVA ANOTACIÓN
+B2CSession = Annotated[Connection, Depends(get_b2c_db)]
 
-# --- ENDPOINTS DE GESTIÓN DE PLANTILLAS ---
+# --- Modelos para Descarga ---
+class ZipDownloadRequest(BaseModel):
+    files: list[str]
 
-@router.get("/plantillas", response_model=List[dict])
-def get_plantillas_list(db: B2CDBSession, current_user: str = Depends(get_current_user_email)): # Visible para todos
-    """Obtiene la lista de todas las plantillas guardadas."""
+# --- ENDPOINTS CRUD (Plantillas) ---
+
+@router.get("/plantillas")
+async def listar_plantillas(db: B2CSession):
     try:
-        return db_plantillas.listar_plantillas_db(db)
+        return listar_plantillas_db(db)
     except Exception as e:
         logger.error(f"Error al listar plantillas: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error al obtener plantillas.")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
-@router.get("/plantillas/{id_plantilla}")
-def get_plantilla_detail(id_plantilla: int, db: B2CDBSession, current_user: str = Depends(get_current_user_email)): # Visible para todos
-    plantilla = db_plantillas.cargar_plantilla_db(db, id_plantilla)
-    if not plantilla:
-        raise HTTPException(status_code=404, detail="Plantilla no encontrada")
-    return plantilla
-
-# --- RUTAS PROTEGIDAS SOLO PARA ADMIN ---
+@router.get("/plantillas/{id}")
+async def obtener_plantilla(id: int, db: B2CSession):
+    try:
+        p = cargar_plantilla_db(db, id)
+        if not p: 
+            logger.warning(f"Plantilla {id} no encontrada.")
+            raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+        return p
+    except HTTPException: raise
+    except Exception as e:
+        logger.error(f"Error al obtener plantilla {id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")
 
 @router.post("/plantillas")
-def save_plantilla(
-    req: PlantillaSaveRequest,
-    db: B2CDBSession,
-    current_user_email: CurrentAdminUser # <-- 3. SOLO ADMIN PUEDE GUARDAR
-):
-    """Guarda una NUEVA plantilla de campaña."""
+async def crear_plantilla(req: dict, db: B2CSession, user: str = Depends(get_current_user_email)):
     try:
-        # Verificar si ya existe
-        existe = db_plantillas.plantilla_existe_db(db, req.nombre_plantilla)
-        if existe:
-            raise HTTPException(status_code=409, detail="Ya existe una plantilla con ese nombre.")
-            
-        id_usuario = db_users.get_user_id_by_email(db, current_user_email)
+        id_new = guardar_plantilla_db(db, req, user)
         
-        success = db_plantillas.guardar_plantilla_db(
-            db_session=db,
-            nombre_plantilla=req.nombre_plantilla,
-            id_estrategia_base=req.id_estrategia_base,
-            reglas_validacion_json=req.reglas_validacion_json,
-            reglas_procesamiento_json=req.reglas_procesamiento_json,
-            modo_salida=req.modo_salida,
-            id_usuario_creador=id_usuario,
-            usuario_creador=current_user_email
-        )
-        if not success:
-            raise HTTPException(status_code=500, detail="No se pudo guardar la plantilla.")
-            
-        return {"status": "Plantilla guardada con éxito"}
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error al guardar plantilla: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error interno al guardar la plantilla.")
+        # --- AUDITORÍA ---
+        try:
+            db_users.registrar_accion_db(
+                db, user, "crear_plantilla_campana", 
+                {"nombre": req.get("nombre_plantilla"), "id_generado": id_new}
+            )
+        except Exception as audit_err:
+            logger.error(f"Error auditoría crear plantilla: {audit_err}")
 
-@router.put("/plantillas/{id_plantilla}")
-def update_plantilla(
-    id_plantilla: int,
-    req: PlantillaSaveRequest,
-    db: B2CDBSession,
-    current_user_email: CurrentAdminUser # <-- 4. SOLO ADMIN PUEDE EDITAR
-):
-    """Actualiza una plantilla existente."""
+        logger.info(f"Plantilla creada con ID {id_new} por {user}")
+        return {"id": id_new, "message": "Plantilla creada correctamente"}
+    except Exception as e:
+        logger.error(f"Error al crear plantilla: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al guardar: {str(e)}")
+
+@router.put("/plantillas/{id}")
+async def editar_plantilla(id: int, req: dict, db: B2CSession, user: str = Depends(get_current_user_email)):
     try:
-        id_usuario = db_users.get_user_id_by_email(db, current_user_email)
-        
-        success = db_plantillas.actualizar_plantilla_db(
-            db_session=db,
-            id_plantilla=id_plantilla,
-            nombre_plantilla=req.nombre_plantilla,
-            id_estrategia_base=req.id_estrategia_base,
-            reglas_validacion_json=req.reglas_validacion_json,
-            reglas_procesamiento_json=req.reglas_procesamiento_json,
-            modo_salida=req.modo_salida,
-            id_usuario_creador=id_usuario,
-            usuario_creador=current_user_email
-        )
-        
-        if not success:
-            raise HTTPException(status_code=404, detail="No se encontró la plantilla para actualizar.")
-            
-        return {"status": "Plantilla actualizada con éxito"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error al actualizar plantilla: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Error interno al actualizar la plantilla.")
+        # Obtener ID usuario
+        user_id = 0
+        try:
+            user_row = db.execute(text("SELECT id FROM B2C.dbo.Usuarios WHERE email = :email"), {"email": user}).fetchone()
+            user_id = user_row[0] if user_row else 0
+        except: pass
 
-# --- ENDPOINTS DE EJECUCIÓN ASÍNCRONA (Disponibles para todos) ---
+        nombre = req.get("nombre_plantilla")
+        id_estrategia = req.get("id_estrategia_base")
+        reglas_val = req.get("reglas_validacion_json")
+        reglas_proc = req.get("reglas_procesamiento_json")
+        modo = req.get("modo_salida")
+
+        actualizar_plantilla_db(db, id, nombre, id_estrategia, reglas_val, reglas_proc, modo, user_id, user)
+        
+        # --- AUDITORÍA ---
+        try:
+            db_users.registrar_accion_db(
+                db, user, "editar_plantilla_campana", 
+                {"id_plantilla": id, "nuevo_nombre": nombre}
+            )
+        except Exception as audit_err:
+            logger.error(f"Error auditoría editar plantilla: {audit_err}")
+
+        logger.info(f"Plantilla {id} actualizada por {user}")
+        return {"message": "Plantilla actualizada correctamente"}
+    except Exception as e:
+        logger.error(f"Error al actualizar plantilla {id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al actualizar: {str(e)}")
+
+# --- ENDPOINTS EJECUCIÓN ---
 
 @router.post("/ejecutar/{id_plantilla}")
 async def ejecutar_campana(
-    id_plantilla: int,
+    id_plantilla: int, 
     background_tasks: BackgroundTasks,
-    current_user_email: CurrentUserEmail # <-- 5. CUALQUIER USUARIO PUEDE EJECUTAR
+    db: B2CSession, # Inyectamos DB para auditoría
+    user: str = Depends(get_current_user_email)
 ):
-    """Inicia la ejecución asíncrona de un pipeline de campaña."""
-    task_id = str(uuid.uuid4())
-    tasks_db[task_id] = {"status": "running", "data": None, "user": current_user_email}
-    
-    db_key_b2c = "b2c" 
-    
-    background_tasks.add_task(ejecutar_pipeline_campana, id_plantilla, task_id, db_key_b2c)
-    
-    logger.info(f"Tarea de campaña {task_id} iniciada por {current_user_email}.")
-    return {"task_id": task_id}
+    try:
+        import uuid
+        task_id = str(uuid.uuid4())
+        tasks_db[task_id] = {"status": "running", "user_email": user}
+        
+        # --- AUDITORÍA ---
+        try:
+            plantilla = cargar_plantilla_db(db, id_plantilla)
+            nombre_p = plantilla["nombre_plantilla"] if plantilla else "Desconocida"
+            
+            db_users.registrar_accion_db(
+                db, user, "ejecutar_campana", 
+                {"id_plantilla": id_plantilla, "nombre_plantilla": nombre_p, "task_id": task_id}
+            )
+        except Exception as audit_err:
+            logger.error(f"Error auditoría ejecutar: {audit_err}")
+
+        logger.info(f"Iniciando tarea {task_id} para plantilla {id_plantilla} (Usuario: {user})")
+        background_tasks.add_task(ejecutar_pipeline_campana, id_plantilla, task_id, "b2c")
+        
+        return {"task_id": task_id}
+    except Exception as e:
+        logger.error(f"Error al iniciar ejecución de campaña {id_plantilla}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al iniciar proceso: {str(e)}")
 
 @router.get("/status/{task_id}")
-async def get_task_status(task_id: str, current_user: str = Depends(get_current_user_email)):
-    """Sondea el estado de una tarea de campaña en ejecución."""
+async def get_status(task_id: str):
     task = tasks_db.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
-    return {"status": task["status"], "error": task.get("error_message")}
+    if not task: raise HTTPException(status_code=404, detail="Tarea no encontrada")
+    return task
 
 @router.get("/resultados/{task_id}")
-async def get_task_results(task_id: str, current_user: str = Depends(get_current_user_email)):
-    """Obtiene los resultados (lista de archivos) de una tarea completada."""
+async def get_resultados(task_id: str):
     task = tasks_db.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
-    if task["status"] != "complete":
-        raise HTTPException(status_code=400, detail=f"La tarea no está completa. Estado: {task['status']}")
-    
+    if not task: raise HTTPException(status_code=404)
+    if task["status"] != "complete": raise HTTPException(status_code=400, detail="No completada")
     return {"resultados": task["data"]}
 
 @router.post("/cancel/{task_id}")
-async def cancel_campana_task(
-    task_id: str,
-    audit_db: B2CDBSession,
-    current_user_email: CurrentUserEmail
+async def cancel_task(
+    task_id: str, 
+    db: B2CSession,
+    user: str = Depends(get_current_user_email)
 ):
-    """
-    Intenta cancelar una tarea en ejecución o limpia una tarea completada/errónea.
-    """
-    task = tasks_db.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Tarea no encontrada.")
-    
-    status = task.get("status")
-
-    if status == "running":
-        tasks_db[task_id]["status"] = "cancelled"
-        logger.info(f"Cancelación solicitada para la tarea {task_id} por {current_user_email}.")
+    try:
+        task = tasks_db.get(task_id)
+        if not task: raise HTTPException(status_code=404, detail="Tarea no encontrada")
         
-        # Auditoría de cancelación
+        if task.get("user_email") != user:
+             logger.warning(f"Usuario {user} intentó cancelar tarea {task_id} de {task.get('user_email')}")
+        
+        task["status"] = "cancelled"
+        
+        # --- AUDITORÍA ---
         try:
-            db_users.registrar_accion_db(audit_db, current_user_email, "cancelar_campana", {"task_id": task_id})
-        except Exception as e_audit:
-            logger.error(f"Error al registrar auditoría (cancelar_campana): {e_audit}")
-            
-        return {"status": "cancellation_requested"}
+            db_users.registrar_accion_db(
+                db, user, "cancelar_campana", 
+                {"task_id": task_id}
+            )
+        except: pass
+
+        logger.info(f"Solicitud de cancelación para tarea {task_id} recibida de {user}")
+        return {"message": "Cancelación solicitada"}
+    except HTTPException: raise
+    except Exception as e:
+        logger.error(f"Error al cancelar tarea {task_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- DESCARGAS Y PREVIEW (CON AUDITORÍA) ---
+
+@router.post("/download-zip")
+async def download_zip(
+    req: ZipDownloadRequest, 
+    db: B2CSession,
+    user: str = Depends(get_current_user_email)
+):
+    """Genera y descarga un ZIP con auditoría."""
+    base_dir = "campanas_generadas"
     
-    if status in ["complete", "error", "cancelled"]:
-        # Si la tarea ya terminó o ya está cancelada, esta llamada la limpia de memoria
-        tasks_db.pop(task_id, None)
-        logger.info(f"Tarea {task_id} (estado: {status}) limpiada de la memoria por {current_user_email}.")
-        return {"status": "cleared"}
+    try:
+        # --- AUDITORÍA ---
+        try:
+            db_users.registrar_accion_db(
+                db, user, "descargar_zip_campana", 
+                {"cantidad_archivos": len(req.files), "archivos": str(req.files)[:200]}
+            )
+        except: pass
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            for file_rel_path in req.files:
+                if ".." in file_rel_path: continue
+                full_path = os.path.join(base_dir, file_rel_path)
+                if os.path.exists(full_path):
+                    zip_file.write(full_path, arcname=os.path.basename(full_path))
+        
+        zip_buffer.seek(0)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"campana_pack_{timestamp}.zip"
+        
+        return StreamingResponse(
+            zip_buffer, 
+            media_type="application/zip", 
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+
+    except Exception as e:
+        logger.error(f"Error generando ZIP: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generando archivo ZIP.")
+
+@router.get("/download-file")
+async def download_file(
+    file_path: str, 
+    db: B2CSession,
+    user: str = Depends(get_current_user_email)
+):
+    """Descarga un archivo individual con auditoría."""
+    base_dir = "campanas_generadas"
+    if ".." in file_path: raise HTTPException(status_code=400, detail="Ruta inválida")
     
-    return {"status": status}
+    full_path = os.path.join(base_dir, file_path)
+    if not os.path.exists(full_path):
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        
+    # --- AUDITORÍA ---
+    try:
+        db_users.registrar_accion_db(
+            db, user, "descargar_archivo_campana", 
+            {"archivo": os.path.basename(full_path)}
+        )
+    except: pass
+
+    return FileResponse(
+        path=full_path, 
+        filename=os.path.basename(full_path), 
+        media_type='application/octet-stream'
+    )
+
+@router.get("/check-existing/{id_plantilla}")
+async def check_existing_files(id_plantilla: int, db: B2CSession):
+    try:
+        plantilla = cargar_plantilla_db(db, id_plantilla)
+        if not plantilla: raise HTTPException(status_code=404)
+        estrategia = db_ops.cargar_una_estrategia_db(db, plantilla["id_estrategia_base"])
+        if not estrategia: raise HTTPException(status_code=404)
+        cliente = estrategia["codigo_cliente"]
+        
+        now = datetime.now()
+        target_dir = os.path.join("campanas_generadas", cliente, now.strftime("%d%m%Y"))
+        
+        files = []
+        if os.path.exists(target_dir):
+             for f in os.listdir(target_dir):
+                 if f.endswith(".csv") or f.endswith(".xlsx"):
+                     files.append(f"{cliente}/{now.strftime('%d%m%Y')}/{f}")
+        return {"files": files}
+    except Exception as e:
+        logger.error(f"Error check files: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/preview")
+async def get_file_preview(file_path: str, user: str = Depends(get_current_user_email)):
+    base_dir = "campanas_generadas"
+    if ".." in file_path: raise HTTPException(status_code=400)
+    full_path = os.path.join(base_dir, file_path)
+    if not os.path.exists(full_path): raise HTTPException(status_code=404)
+
+    try:
+        df = pd.read_csv(full_path, sep=';', encoding='utf-8-sig', nrows=10)
+        df = df.replace({np.nan: None})
+        return df.to_dict(orient="records")
+    except Exception as e:
+        logger.error(f"Error preview: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))

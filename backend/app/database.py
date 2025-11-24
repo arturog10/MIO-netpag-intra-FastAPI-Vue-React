@@ -62,8 +62,15 @@ def initialize_engines():
             )
             
         try:
+            # --- CAMBIO IMPORTANTE AQUÍ ---
             engines[db_key] = {
-                "engine": create_engine(connection_string),
+                "engine": create_engine(
+                    connection_string,
+                    pool_pre_ping=True,   # <--- Verifica conexión antes de usarla (Evita error 10054)
+                    pool_recycle=1800,    # Recicla conexiones cada 30 min para evitar timeouts del servidor
+                    pool_size=10,         # Tamaño del pool
+                    max_overflow=20       # Conexiones extra si el pool se llena
+                ),
                 "default_schema": "dbo" 
             }
             logger.info(f"Motor creado para key '{db_key}' -> DB: '{db_name}'")
