@@ -1,134 +1,162 @@
 import logging
-from typing import Optional, List
-from sqlalchemy import (
-    select, func, insert, update
-)
-from sqlalchemy.engine import Connection
-
-# Importamos los helpers genéricos del archivo db_operations
+from datetime import datetime
+from sqlalchemy import select, insert, update, desc, or_
 from app.db_operations import _get_reflected_table
 
 logger = logging.getLogger(__name__)
 
-# --- OPERACIONES DE PLANTILLAS DE CAMPAÑAS ---
-
-def listar_plantillas_db(db_session: Connection) -> List[dict]:
+def listar_plantillas_db(db_session, es_admin=False):
     """
-    Obtiene una lista de todas las plantillas de campañas guardadas.
-    No trae las reglas JSON para que la carga sea rápida.
+    Lista las plantillas.
+    - Usuarios normales: Solo ven activas (estado = 1 o NULL).
+    - Admins: Ven todas (incluyendo estado = 0).
     """
     try:
         tabla = _get_reflected_table("tabla_plantillas_campanas")
         
-        # Seleccionamos solo los campos necesarios para la lista
         stmt = select(
             tabla.c.id, 
             tabla.c.nombre_plantilla, 
-            tabla.c.fecha_creacion, 
-            tabla.c.usuario_creador
-        ).order_by(tabla.c.nombre_plantilla)
+            tabla.c.usuario_creador, 
+            tabla.c.fecha_creacion,
+            tabla.c.usuario_modificacion, # Nuevo
+            tabla.c.fecha_modificacion,   # Nuevo
+            tabla.c.estado                # Nuevo
+        ).order_by(desc(tabla.c.fecha_creacion))
         
+        # Filtro: Si no es admin, ocultar las eliminadas (estado 0)
+        if not es_admin:
+            # Mostramos las que son 1 ó NULL (para compatibilidad con datos viejos)
+            stmt = stmt.where(or_(tabla.c.estado == 1, tabla.c.estado.is_(None)))
+
         result = db_session.execute(stmt).fetchall()
-        logger.info(f"Se encontraron {len(result)} plantillas de campañas.")
-        return [dict(row._mapping) for row in result]
+        
+        lista_final = []
+        for row in result:
+            row_dict = dict(row._mapping)
+            
+            # Formato Fechas
+            if row_dict.get('fecha_creacion'):
+                row_dict['fecha_creacion'] = row_dict['fecha_creacion'].strftime('%d/%m/%Y %H:%M')
+            
+            if row_dict.get('fecha_modificacion'):
+                row_dict['fecha_modificacion'] = row_dict['fecha_modificacion'].strftime('%d/%m/%Y %H:%M')
+            else:
+                row_dict['fecha_modificacion'] = "-"
+            
+            # Normalizar estado (si es None, asumir 1)
+            if row_dict.get('estado') is None:
+                row_dict['estado'] = 1
+                
+            lista_final.append(row_dict)
+            
+        return lista_final
+
     except Exception as e:
-        logger.error(f"Error al CARGAR LISTA de plantillas de campañas: {e}", exc_info=True)
+        logger.error(f"Error listando plantillas: {e}")
         raise e
 
-def cargar_plantilla_db(db_session: Connection, id_plantilla: int) -> Optional[dict]:
-    """
-    Carga todos los datos de una plantilla específica, incluyendo las reglas JSON.
-    """
+def cargar_plantilla_db(db_session, id_plantilla):
+    """Carga una plantilla por ID."""
     try:
         tabla = _get_reflected_table("tabla_plantillas_campanas")
-        
-        # Seleccionamos todos los campos
         stmt = select(tabla).where(tabla.c.id == id_plantilla)
-        result = db_session.execute(stmt).fetchone()
+        row = db_session.execute(stmt).fetchone()
         
-        if result:
-            logger.info(f"Cargando datos de la plantilla ID: {id_plantilla}")
-            return dict(result._mapping)
-        
-        logger.warning(f"No se encontró la plantilla con ID: {id_plantilla}")
+        if row:
+            return dict(row._mapping)
         return None
     except Exception as e:
-        logger.error(f"Error al CARGAR UNA plantilla (ID {id_plantilla}): {e}", exc_info=True)
+        logger.error(f"Error cargando plantilla {id_plantilla}: {e}")
         raise e
 
-def guardar_plantilla_db(db_session: Connection, nombre_plantilla: str, id_estrategia_base: int, 
-                           reglas_validacion_json: str, reglas_procesamiento_json: str, 
-                           modo_salida: str, id_usuario_creador: Optional[int], 
-                           usuario_creador: Optional[str]) -> bool:
-    """
-    Guarda una nueva plantilla de campaña en la base de datos.
-    """
+def guardar_plantilla_db(db_session, nombre, id_estrategia, reglas_val, reglas_proc, modo, id_usuario_creador, usuario_creador):
+    """Guarda nueva plantilla (Activa por defecto)."""
     try:
         tabla = _get_reflected_table("tabla_plantillas_campanas")
         
         stmt = insert(tabla).values(
-            nombre_plantilla=nombre_plantilla,
-            id_estrategia_base=id_estrategia_base,
-            reglas_validacion_json=reglas_validacion_json,
-            reglas_procesamiento_json=reglas_procesamiento_json,
-            modo_salida=modo_salida,
+            nombre_plantilla=nombre,
+            id_estrategia_base=id_estrategia,
+            reglas_validacion_json=reglas_val,
+            reglas_procesamiento_json=reglas_proc,
+            modo_salida=modo,
             id_usuario_creador=id_usuario_creador,
-            usuario_creador=usuario_creador
-            # fecha_creacion usa el DEFAULT de SQL
+            usuario_creador=usuario_creador,
+            fecha_creacion=datetime.now(),
+            estado=1, # <--- Activo
+            # Inicializamos campos de modificación vacíos o iguales a creación
+            fecha_modificacion=None 
+        )
+        
+        result = db_session.execute(stmt)
+        return result.inserted_primary_key[0]
+
+    except Exception as e:
+        logger.error(f"Error guardando plantilla: {e}")
+        raise e
+
+def actualizar_plantilla_db(db_session, id_plantilla, nombre, id_estrategia, reglas_val, reglas_proc, modo, id_usuario_mod, usuario_mod):
+    """Actualiza datos y registra quién lo hizo (Auditoría)."""
+    try:
+        tabla = _get_reflected_table("tabla_plantillas_campanas")
+        
+        stmt = update(tabla).where(tabla.c.id == id_plantilla).values(
+            nombre_plantilla=nombre,
+            id_estrategia_base=id_estrategia,
+            reglas_validacion_json=reglas_val,
+            reglas_procesamiento_json=reglas_proc,
+            modo_salida=modo,
+            # --- Auditoría de Modificación ---
+            id_usuario_modificacion=id_usuario_mod,
+            usuario_modificacion=usuario_mod,
+            fecha_modificacion=datetime.now()
         )
         
         db_session.execute(stmt)
-        logger.info(f"Plantilla '{nombre_plantilla}' guardada con éxito por {usuario_creador}.")
-        return True
+        
     except Exception as e:
-        logger.error(f"Error al GUARDAR la plantilla '{nombre_plantilla}': {e}", exc_info=True)
+        logger.error(f"Error actualizando plantilla {id_plantilla}: {e}")
         raise e
 
-def actualizar_plantilla_db(db_session: Connection, id_plantilla: int, nombre_plantilla: str, id_estrategia_base: int, 
-                             reglas_validacion_json: str, reglas_procesamiento_json: str, 
-                             modo_salida: str, id_usuario_creador: Optional[int], 
-                             usuario_creador: Optional[str]) -> bool:
+def eliminar_plantilla_db(db_session, id_plantilla, id_usuario_mod, usuario_mod):
     """
-    Actualiza una plantilla de campaña existente por su ID.
+    Borrado Lógico: Cambia estado a 0 y registra quién lo borró.
     """
     try:
         tabla = _get_reflected_table("tabla_plantillas_campanas")
         
-        stmt = update(tabla).where(
-            tabla.c.id == id_plantilla
-        ).values(
-            nombre_plantilla=nombre_plantilla,
-            id_estrategia_base=id_estrategia_base,
-            reglas_validacion_json=reglas_validacion_json,
-            reglas_procesamiento_json=reglas_procesamiento_json,
-            modo_salida=modo_salida,
-            id_usuario_creador=id_usuario_creador, # Actualiza quién fue el último en modificar
-            usuario_creador=usuario_creador
+        stmt = update(tabla).where(tabla.c.id == id_plantilla).values(
+            estado=0, # <--- Inactivo
+            id_usuario_modificacion=id_usuario_mod,
+            usuario_modificacion=usuario_mod,
+            fecha_modificacion=datetime.now()
         )
         
         result = db_session.execute(stmt)
         if result.rowcount == 0:
-            logger.warning(f"Se intentó actualizar la plantilla ID {id_plantilla}, pero no se encontró.")
-            return False
+            # Puede pasar si el ID no existe
+            logger.warning(f"Intentando eliminar plantilla inexistente ID {id_plantilla}")
             
-        logger.info(f"Plantilla '{nombre_plantilla}' (ID {id_plantilla}) actualizada por {usuario_creador}.")
-        return True
     except Exception as e:
-        logger.error(f"Error al ACTUALIZAR la plantilla ID {id_plantilla}: {e}", exc_info=True)
+        logger.error(f"Error eliminando (lógico) plantilla {id_plantilla}: {e}")
         raise e
 
-# --- ESTA ES LA FUNCIÓN QUE FALTABA O NO SE ESTABA LEYENDO ---
-def plantilla_existe_db(db_session: Connection, nombre: str) -> bool:
+def cambiar_estado_plantilla_db(db_session, id_plantilla, nuevo_estado, id_user_mod, user_mod):
     """
-    Verifica si ya existe una plantilla con el mismo nombre.
+    Para el Switch: Cambia solo el estado (1 o 0) y audita.
     """
     try:
         tabla = _get_reflected_table("tabla_plantillas_campanas")
-        stmt = select(func.count()).select_from(tabla).where(
-            tabla.c.nombre_plantilla == nombre
+        
+        stmt = update(tabla).where(tabla.c.id == id_plantilla).values(
+            estado=nuevo_estado,
+            id_usuario_modificacion=id_user_mod,
+            usuario_modificacion=user_mod,
+            fecha_modificacion=datetime.now()
         )
-        result = db_session.execute(stmt).scalar_one_or_none()
-        return (result or 0) > 0
+        
+        db_session.execute(stmt)
     except Exception as e:
-        logger.error(f"Error al CHEQUEAR plantilla '{nombre}': {e}", exc_info=True)
+        logger.error(f"Error cambiando estado plantilla {id_plantilla}: {e}")
         raise e

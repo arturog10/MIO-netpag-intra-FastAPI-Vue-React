@@ -17,7 +17,9 @@ import { Divider } from 'primereact/divider';
 import { Badge } from 'primereact/badge';
 import { Accordion, AccordionTab } from 'primereact/accordion';
 import { Dialog } from 'primereact/dialog';
+import { InputSwitch } from 'primereact/inputswitch'; // <--- NUEVO IMPORT
 
+// --- Estilos ---
 import { selectClass, inputClass, btnPrimary, btnSecondary, btnDanger } from '../styles/appStyles';
 
 // --- Configuración API ---
@@ -79,7 +81,14 @@ function GeneradorCampanasPage() {
     const [selectedCliente, setSelectedCliente] = useState(null);
     const [estrategiasDisponibles, setEstrategiasDisponibles] = useState([]); 
     const [selectedEstrategia, setSelectedEstrategia] = useState(null);
+    
+    // Configuración
     const [tipoCampana, setTipoCampana] = useState(null); 
+    const [selectedProveedor, setSelectedProveedor] = useState(null); 
+    const [emailStrategy, setEmailStrategy] = useState("jerarquia");
+    const [selectedEmailCol, setSelectedEmailCol] = useState(null);
+    
+    // División
     const [columnasDisponibles, setColumnasDisponibles] = useState([]); 
     const [columnasDivision, setColumnasDivision] = useState([]); 
     const [modoSalida, setModoSalida] = useState("archivo"); 
@@ -92,14 +101,15 @@ function GeneradorCampanasPage() {
     ]);
     const [activeSegmentIndex, setActiveSegmentIndex] = useState(0);
 
-    // Temporales Fórmulas
+    // Temporales Constructor Fórmulas
     const [tempTargetCol, setTempTargetCol] = useState("");
     const [tempFormula, setTempFormula] = useState("");
+    const [tempCondicion, setTempCondicion] = useState(""); 
     const [tempTipoDato, setTempTipoDato] = useState("int");
     const [tempConstante, setTempConstante] = useState(null);
     const [colToInsert, setColToInsert] = useState(null);
     
-    // Temporales Condición Interna
+    // Constructor Condición Interna
     const [tempCondCol, setTempCondCol] = useState(null);
     const [tempCondOp, setTempCondOp] = useState(null);
     const [tempCondVal, setTempCondVal] = useState("");
@@ -114,10 +124,29 @@ function GeneradorCampanasPage() {
     const [tempStaticCol, setTempStaticCol] = useState("");
     const [tempStaticVal, setTempStaticVal] = useState("");
 
-    // Helper para deshabilitar input de valor
+    // --- OPCIONES DE PROVEEDORES (Memoizado) ---
+    const proveedoresConfig = useMemo(() => ({
+        'MAIL': [
+            { label: 'Punto Net', value: 'PUNTO_NET' },
+            { label: 'Fidelizador', value: 'FIDELIZADOR' }
+        ],
+        'MAIL_INF': [
+            { label: 'Punto Net', value: 'PUNTO_NET' },
+            { label: 'Fidelizador', value: 'FIDELIZADOR' }
+        ],
+        'SMS': [
+            { label: 'Masivian', value: 'MASIVIAN' },
+            { label: 'Siptel', value: 'SIPTEL' }
+        ]
+    }), []);
+
+    useEffect(() => {
+        if (!isEditing) setSelectedProveedor(null);
+    }, [tipoCampana]);
+
     const isOpNulo = (op) => op === 'es_nulo' || op === 'no_es_nulo';
 
-    // AVAILABLE COLUMNS
+    // --- AVAILABLE COLUMNS ---
     const availableColumns = useMemo(() => {
         const base = [...columnasDisponibles];
         if (!segmentation || activeSegmentIndex < 0 || activeSegmentIndex >= segmentation.length) return base;
@@ -141,6 +170,14 @@ function GeneradorCampanasPage() {
         return base;
     }, [columnasDisponibles, segmentation, activeSegmentIndex]);
 
+    const emailColumnsAvailable = useMemo(() => {
+        return columnasDisponibles.filter(c => 
+            c.value.toLowerCase().includes('mail') || 
+            c.value.toLowerCase().includes('correo') || 
+            c.value.toLowerCase().includes('email')
+        );
+    }, [columnasDisponibles]);
+
     useEffect(() => {
         if (activeSegmentIndex >= segmentation.length && segmentation.length > 0) {
             setActiveSegmentIndex(segmentation.length - 1);
@@ -162,6 +199,7 @@ function GeneradorCampanasPage() {
         setTempTargetCol(""); setTempFormula(""); setTempSegSufijo(""); 
         setTempCondCol(null); setTempCondOp(null); setTempCondVal("");
         setTempSegCol(null); setTempSegOp("contiene"); setTempSegVal(""); setTempStaticCol(""); setTempStaticVal("");
+        setSelectedProveedor(null); setEmailStrategy("jerarquia"); setSelectedEmailCol(null);
         setEstrategiasDisponibles([]);
     };
 
@@ -177,6 +215,7 @@ function GeneradorCampanasPage() {
     const addSegmentoElse = () => setSegmentation([...segmentation, { id: 'else', sufijo: "RESTO", condicion: "else", condiciones: [], formulas: [], columnas_estaticas: [] }]);
     const removeSegment = (idx) => { if (segmentation.length === 1) return; setSegmentation(segmentation.filter((_, i) => i !== idx)); };
 
+    // Condiciones
     const addConditionToSegment = () => {
         if (!tempSegCol) return;
         if (!isOpNulo(tempSegOp) && !tempSegVal) return;
@@ -187,6 +226,7 @@ function GeneradorCampanasPage() {
     };
     const removeConditionFromSegment = (idxCond) => { const newSegs = [...segmentation]; newSegs[activeSegmentIndex].condiciones.splice(idxCond, 1); setSegmentation(newSegs); };
 
+    // Estáticas
     const addStaticColToSegment = () => {
         if (!tempStaticCol || !tempStaticVal) return;
         const newSegs = [...segmentation]; 
@@ -196,6 +236,7 @@ function GeneradorCampanasPage() {
     };
     const removeStaticColFromSegment = (i) => { const n = [...segmentation]; n[activeSegmentIndex].columnas_estaticas.splice(i, 1); setSegmentation(n); };
 
+    // Fórmulas
     const appendToFormula = (text) => setTempFormula(prev => prev + " " + text + " ");
     const clearFormula = () => setTempFormula("");
     
@@ -209,7 +250,7 @@ function GeneradorCampanasPage() {
     };
     const removeFormulaFromSegment = (i) => { const n = [...segmentation]; n[activeSegmentIndex].formulas.splice(i, 1); setSegmentation(n); };
 
-    // CRUD
+    // --- CRUD ---
     const handleEditPlantilla = async (rowData) => {
         setLoading(true);
         try {
@@ -234,8 +275,14 @@ function GeneradorCampanasPage() {
             try {
                 const val = JSON.parse(plantilla.reglas_validacion_json || "{}");
                 if (val.tipo_campana) setTipoCampana(val.tipo_campana);
+                
                 const proc = JSON.parse(plantilla.reglas_procesamiento_json || "{}");
                 setColumnasDivision(proc.columnas_division || []);
+                
+                if (proc.proveedor) setSelectedProveedor(proc.proveedor);
+                if (proc.estrategia_email) setEmailStrategy(proc.estrategia_email);
+                if (proc.columna_email_elegida) setSelectedEmailCol(proc.columna_email_elegida);
+
                 if (proc.segmentacion && Array.isArray(proc.segmentacion)) {
                     const segsSanitized = proc.segmentacion.map(s => ({
                         ...s,
@@ -258,10 +305,22 @@ function GeneradorCampanasPage() {
 
     const handleGuardar = async () => {
         if (!nombrePlantilla || !selectedEstrategia || !tipoCampana) { toast.current.show({ severity: 'warn', summary: 'Faltan datos', detail: 'Complete campos.' }); return; }
+        
+        if ((tipoCampana === 'MAIL' || tipoCampana === 'MAIL_INF') && emailStrategy === 'unica' && !selectedEmailCol) {
+            toast.current.show({ severity: 'warn', summary: 'Falta Columna', detail: 'Seleccione la columna de correo.' });
+            return;
+        }
+
         const payload = {
             nombre_plantilla: nombrePlantilla, id_estrategia_base: selectedEstrategia,
             reglas_validacion_json: JSON.stringify({ tipo_campana: tipoCampana }),
-            reglas_procesamiento_json: JSON.stringify({ columnas_division: columnasDivision, segmentacion: segmentation }),
+            reglas_procesamiento_json: JSON.stringify({ 
+                columnas_division: columnasDivision, 
+                segmentacion: segmentation,
+                proveedor: selectedProveedor, 
+                estrategia_email: emailStrategy,
+                columna_email_elegida: selectedEmailCol
+            }),
             modo_salida: modoSalida
         };
         try {
@@ -273,23 +332,49 @@ function GeneradorCampanasPage() {
         } catch (error) { toast.current.show({ severity: 'error', summary: 'Error', detail: 'Fallo al guardar.' }); }
     };
 
-    // --- Ejecución con Verificación Previa ---
+    // --- NUEVO HANDLER: CAMBIAR ESTADO (SWITCH) ---
+    const handleToggleEstado = async (rowData, nuevoValor) => {
+        // 1. Actualización Optimista SEGURA (Functional Update)
+        // Usamos 'prevList' para asegurarnos de trabajar con el estado más reciente
+        // sin importar qué tan rápido haga clic el usuario.
+        setPlantillasGuardadas(prevList => 
+            prevList.map(p => p.id === rowData.id ? { ...p, estado: nuevoValor ? 1 : 0 } : p)
+        );
+
+        try {
+            // 2. Llamada al Backend
+            await axios.patch(`${API_CAMPANAS_URL}/plantillas/${rowData.id}/estado`, 
+                { estado: nuevoValor ? 1 : 0 }, 
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
+            
+            // ÉXITO: Solo mostramos el toast. 
+            // NO llamamos a fetchPlantillas() aquí para evitar que una respuesta lenta 
+            // del servidor sobrescriba cambios pendientes de otros botones.
+            toast.current.show({ severity: 'success', summary: 'Actualizado', detail: `Plantilla ${nuevoValor ? 'Activada' : 'Desactivada'}`, life: 2000 });
+            
+        } catch (error) {
+            // ERROR: Revertir SOLO este ítem específico
+            // Invertimos la lógica: si intentamos poner true y falló, volvemos a false.
+            setPlantillasGuardadas(prevList => 
+                prevList.map(p => p.id === rowData.id ? { ...p, estado: !nuevoValor ? 1 : 0 } : p)
+            );
+            toast.current.show({ severity: 'error', summary: 'Error', detail: 'No se pudo cambiar el estado.' });
+        }
+    };
+
+    // --- Ejecución ---
     const handleCheckAndRun = async (rowData) => {
         setPendingRunRowData(rowData);
         try {
             const res = await axios.get(`${API_CAMPANAS_URL}/check-existing/${rowData.id}`, { headers: { Authorization: `Bearer ${token}` } });
-            if (res.data.files && res.data.files.length > 0) {
-                setExistingFilesList(res.data.files);
-                setExistingFilesDialogVisible(true);
-            } else {
-                runCampaign(rowData);
-            }
+            if (res.data.files && res.data.files.length > 0) { setExistingFilesList(res.data.files); setExistingFilesDialogVisible(true); } 
+            else { runCampaign(rowData); }
         } catch (error) { runCampaign(rowData); }
     };
 
     const runCampaign = async (rowData) => {
-        setExistingFilesDialogVisible(false);
-        setExecutionStatus("running"); setExecutionResults([]); setExecutionStats(null); setExecutingTaskId(null);
+        setExistingFilesDialogVisible(false); setExecutionStatus("running"); setExecutionResults([]); setExecutionStats(null); setExecutingTaskId(null);
         try {
             const res = await axios.post(`${API_CAMPANAS_URL}/ejecutar/${rowData.id}`, {}, { headers: { Authorization: `Bearer ${token}` } });
             const taskId = res.data.task_id; setExecutingTaskId(taskId);
@@ -347,16 +432,31 @@ function GeneradorCampanasPage() {
     };
 
     const formatDate = (dateString) => { if (!dateString) return "-"; const date = new Date(dateString); return `${date.getDate().toString().padStart(2,'0')}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getFullYear()}`; };
+    
     const renderValidationInfo = () => {
         if (!tipoCampana) return null;
         return (
             <div className="mt-3 p-3 bg-blue-50 border border-blue-100 rounded text-sm text-blue-800">
                 <strong className="block mb-1"><i className="pi pi-info-circle mr-2"></i>Validaciones Automáticas:</strong>
                 <ul className="list-disc pl-5 space-y-1">
-                    <li>Eliminación de duplicados.</li>
-                    <li>Inhibición por Reglas de Negocio (SP).</li>
-                    {tipoCampana === 'SMS' && <li>Validación estricta de formato teléfono.</li>}
-                    {tipoCampana !== 'SMS' && <li>Consolidación de correos.</li>}
+                    <li>Filtro de registros ya gestionados hoy (masiv_dia).</li>
+                    <li>Validación de Inhibiciones y Lista Negra (SP).</li>
+                    <li>Validación por Ley Cobranza (Segmento).</li>
+                    <li>Eliminación de Duplicados (RUT, IC).</li>
+                    {tipoCampana === 'SMS' && (
+                        <>
+                            <li>Validación de formato teléfono y prefijo 56.</li>
+                            <li>Eliminación de duplicados por Teléfono.</li>
+                        </>
+                    )}
+                    {(tipoCampana === 'MAIL' || tipoCampana === 'MAIL_INF') && (
+                        <>
+                            <li>Consolidación de correos ({emailStrategy === 'unica' ? 'Columna Única' : 'Jerarquía'}).</li>
+                            <li>Validación de formato email.</li>
+                            <li>Eliminación de duplicados por Email.</li>
+                        </>
+                    )}
+                    {selectedCliente === '0360CQTA' && <li><strong>Reglas Especiales 0360CQTA:</strong> Duplicados por ID y Dirección.</li>}
                 </ul>
             </div>
         );
@@ -394,7 +494,7 @@ function GeneradorCampanasPage() {
 
             <h1 className="text-2xl font-bold mb-4 text-gray-800">Generador de Campañas</h1>
 
-            {/* EJECUCIÓN */}
+            {/* SECCIÓN EJECUCIÓN */}
             {(executionStatus) && (
                 <div className={`mb-6 p-4 border rounded-lg shadow-sm ${executionStatus === 'running' ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}>
                     <h3 className="font-bold text-lg mb-3 text-gray-900">Estado de Ejecución</h3>
@@ -450,15 +550,49 @@ function GeneradorCampanasPage() {
                         <Button label="Refrescar" icon="pi pi-refresh" onClick={fetchPlantillas} size="small" className={btnSecondary} />
                         {isAdmin && <Button label="Nueva Plantilla" icon="pi pi-plus" onClick={() => { resetForm(); setActiveIndex(1); }} size="small" className={btnPrimary} />}
                     </div>
-                    <DataTable value={plantillasGuardadas} stripedRows size="small">
+                    <DataTable value={plantillasGuardadas} stripedRows size="small" emptyMessage="No hay plantillas disponibles.">
                         <Column field="id" header="ID" sortable style={{width:'60px'}}/>
                         <Column field="nombre_plantilla" header="Nombre" sortable />
-                        <Column field="usuario_creador" header="Creador" sortable />
-                        <Column field="fecha_creacion" header="Fecha" sortable body={(r)=>formatDate(r.fecha_creacion)} />
+                        
+                        {isAdmin && (
+                            <Column field="estado" header="Estado" body={(r) => (
+                                <InputSwitch checked={r.estado === 1} onChange={(e) => handleToggleEstado(r, e.value)} />
+                            )} sortable style={{width:'100px'}}/>
+                        )}
+
+                        <Column header="Creado" sortable field="fecha_creacion" body={(r) => (
+                            <div className="flex flex-col">
+                                <span className="font-medium text-sm">{r.fecha_creacion}</span>
+                                <span className="text-xs text-gray-500 truncate" title={r.usuario_creador}>
+                                    {r.usuario_creador}
+                                </span>
+                            </div>
+                        )} style={{ minWidth: '150px' }} />
+                        
+                        <Column header="Modificado" sortable field="fecha_modificacion" body={(r) => {
+                            const sinModificacion = r.fecha_modificacion === '-' || !r.fecha_modificacion;
+                            return (
+                            <div className="flex flex-col">
+                                <span className={`font-medium text-sm ${sinModificacion ? 'text-gray-400' : ''}`}>
+                                    {r.fecha_modificacion}
+                                </span>
+                                {!sinModificacion && r.usuario_modificacion && (
+                                    <span className="text-xs text-gray-500 truncate" title={r.usuario_modificacion}>
+                                        {r.usuario_modificacion}
+                                    </span>
+                                )}
+                            </div>
+                            );
+                        }} style={{ minWidth: '150px' }} />
+
                         <Column header="Acciones" body={(rowData) => (
                             <div className="flex gap-2">
-                                <Button icon="pi pi-play" className="p-button-rounded p-button-success p-button-text" onClick={() => handleCheckAndRun(rowData)} />
-                                {isAdmin && <Button icon="pi pi-pencil" className="p-button-rounded p-button-info p-button-text" onClick={() => handleEditPlantilla(rowData)} />}
+                                {rowData.estado !== 0 && (
+                                    <Button icon="pi pi-play" className="p-button-rounded p-button-success p-button-text" onClick={() => handleCheckAndRun(rowData)} tooltip="Ejecutar" />
+                                )}
+                                {isAdmin && rowData.estado !== 0 && (
+                                    <Button icon="pi pi-pencil" className="p-button-rounded p-button-info p-button-text" onClick={() => handleEditPlantilla(rowData)} tooltip="Editar" />
+                                )}
                             </div>
                         )} />
                     </DataTable>
@@ -480,7 +614,27 @@ function GeneradorCampanasPage() {
                             </div>
                             <div className="p-5 border border-gray-200 rounded-lg bg-white shadow-sm">
                                 <h3 className="font-bold mb-4 text-blue-800 border-b pb-2">2. Configuración</h3>
-                                <div className="mb-2"><label className="block mb-2 text-sm font-semibold">Tipo de Campaña</label><Dropdown value={tipoCampana} options={tiposCampanaOptions} onChange={(e) => setTipoCampana(e.value)} className="w-full md:w-1/2" /></div>
+                                <div className="grid grid-cols-2 gap-6 mb-4">
+                                    <div>
+                                        <label className="block mb-2 text-sm font-semibold">Tipo de Campaña</label>
+                                        <Dropdown value={tipoCampana} options={tiposCampanaOptions} onChange={(e) => setTipoCampana(e.value)} placeholder="Seleccione..." className="w-full" />
+                                    </div>
+                                    <div>
+                                        <label className="block mb-2 text-sm font-semibold">Proveedor de Envío</label>
+                                        <Dropdown value={selectedProveedor} options={tipoCampana ? proveedoresConfig[tipoCampana] : []} onChange={(e) => setSelectedProveedor(e.value)} placeholder="Seleccione..." className="w-full" disabled={!tipoCampana} />
+                                    </div>
+                                </div>
+
+                                {(tipoCampana === 'MAIL' || tipoCampana === 'MAIL_INF') && (
+                                    <div className="bg-blue-50 p-3 rounded border border-blue-100 mb-3">
+                                        <label className="block mb-2 text-sm font-bold text-blue-800">Estrategia de Contacto</label>
+                                        <div className="flex flex-col gap-3">
+                                            <div className="flex align-items-center"><input type="radio" name="emailStrat" value="jerarquia" checked={emailStrategy === 'jerarquia'} onChange={(e) => setEmailStrategy(e.target.value)} className="w-4 h-4 text-blue-600"/><label className="ml-2 text-sm text-gray-700"><strong>Jerarquía Automática:</strong> Buscar el primer correo válido (Mail1 → Mail2...).</label></div>
+                                            <div className="flex align-items-center"><input type="radio" name="emailStrat" value="unica" checked={emailStrategy === 'unica'} onChange={(e) => setEmailStrategy(e.target.value)} className="w-4 h-4 text-blue-600"/><label className="ml-2 text-sm text-gray-700"><strong>Columna Específica:</strong> Usar solo una columna. Si falla, se rechaza.</label></div>
+                                            {emailStrategy === 'unica' && (<div className="ml-6 mt-1"><Dropdown value={selectedEmailCol} options={emailColumnsAvailable} onChange={(e) => setSelectedEmailCol(e.value)} placeholder="Seleccione columna..." className="w-full md:w-1/2 p-inputtext-sm" filter /></div>)}
+                                        </div>
+                                    </div>
+                                )}
                                 {renderValidationInfo()}
                             </div>
                             <div className="p-5 border border-gray-200 rounded-lg bg-white shadow-sm">
@@ -489,17 +643,18 @@ function GeneradorCampanasPage() {
                                 <MultiSelect value={columnasDivision} options={columnasDisponibles} onChange={(e) => setColumnasDivision(e.value)} className="w-full" display="chip" filter />
                             </div>
 
-                            {/* 4. REGLAS (DISEÑO CORREGIDO) */}
+                            {/* 4. REGLAS DE NEGOCIO */}
                             <div className="p-5 border border-gray-200 rounded-lg bg-white shadow-sm">
                                 <h3 className="font-bold mb-4 text-blue-800 border-b pb-2">4. Reglas de Segmentación y Cálculo</h3>
                                 
                                 <div className="mb-4 flex flex-col gap-2 bg-gray-50 p-3 rounded border">
-                                    <span className="font-bold text-sm text-gray-700">Nuevo Segmento:</span>
-                                    <div className="flex gap-2">
-                                        <InputText value={tempSegSufijo} onChange={(e) => setTempSegSufijo(e.target.value)} placeholder="Sufijo (_VIP)" className="p-inputtext-sm w-64" />
+                                    <div className="flex gap-2 items-center mb-2">
+                                        <span className="font-bold text-sm text-gray-700">Nuevo Segmento:</span>
+                                        <InputText value={tempSegSufijo} onChange={(e) => setTempSegSufijo(e.target.value)} placeholder="Sufijo (_VIP)" className="p-inputtext-sm w-40" />
                                         <Button icon="pi pi-plus" label="Crear" size="small" onClick={addSegmento} />
                                         <Button icon="pi pi-filter" label="Else" size="small" severity="warning" outlined onClick={addSegmentoElse} />
                                     </div>
+                                    <small className="text-gray-400">Crea un segmento y luego agrégale condiciones y cálculos.</small>
                                 </div>
 
                                 <Accordion activeIndex={activeSegmentIndex} onTabChange={(e) => setActiveSegmentIndex(e.index)}>
@@ -515,7 +670,7 @@ function GeneradorCampanasPage() {
                                         }>
                                             <div className="flex flex-col gap-4">
                                                 
-                                                {/* 1. CONDICIONES (GRID FIX) */}
+                                                {/* 1. CONDICIONES (GRID 12) */}
                                                 {seg.condicion !== 'else' && (
                                                     <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
                                                         <h4 className="text-xs font-bold mb-2 text-yellow-700 uppercase">1. Condiciones de Filtro (AND)</h4>
@@ -536,7 +691,7 @@ function GeneradorCampanasPage() {
                                                     </div>
                                                 )}
 
-                                                {/* 2. COLUMNAS FIJAS */}
+                                                {/* 2. COLUMNAS FIJAS (GRID) */}
                                                 <div className="border p-3 rounded">
                                                     <h4 className="text-xs font-bold mb-2 text-gray-500 uppercase">2. Columnas Fijas</h4>
                                                     <div className="grid grid-cols-12 gap-2 mb-2 items-end">
@@ -549,42 +704,41 @@ function GeneradorCampanasPage() {
                                                     </ul>
                                                 </div>
 
-                                                {/* 3. FÓRMULAS (DISEÑO CORREGIDO Y MOVIDO) */}
+                                                {/* 3. FÓRMULAS (GRID CORREGIDO) */}
                                                 <div className="border p-3 rounded bg-gray-50">
                                                     <h4 className="text-xs font-bold mb-2 text-gray-500 uppercase">3. Fórmulas</h4>
-                                                    
-                                                    {/* Configuración Básica */}
                                                     <div className="grid grid-cols-12 gap-2 mb-3 items-end">
                                                         <div className="col-span-6"><label className="text-xs text-gray-500">Nueva Columna</label><InputText value={tempTargetCol} onChange={(e) => setTempTargetCol(e.target.value)} placeholder="Ej: total" className="w-full p-inputtext-sm" /></div>
                                                         <div className="col-span-6"><label className="text-xs text-gray-500">Tipo</label><Dropdown value={tempTipoDato} options={tiposDatoOptions} onChange={(e) => setTempTipoDato(e.value)} className="w-full p-inputtext-sm" /></div>
                                                     </div>
                                                     
-                                                    {/* Condición Interna */}
                                                     <div className="grid grid-cols-12 gap-2 mb-2 items-center bg-white p-2 border rounded">
-                                                        <div className="col-span-1 text-xs font-bold text-gray-400">Si:</div>
+                                                        <div className="col-span-1 text-xs font-bold text-gray-400">Si (Opc):</div>
                                                         <div className="col-span-4"><Dropdown value={tempCondCol} options={availableColumns} onChange={(e)=>setTempCondCol(e.value)} placeholder="Columna" className="w-full p-inputtext-sm" filter /></div>
                                                         <div className="col-span-3"><Dropdown value={tempCondOp} options={operadoresOptions} onChange={(e)=>setTempCondOp(e.value)} placeholder="Op" className="w-full p-inputtext-sm" /></div>
                                                         <div className="col-span-4"><InputText value={tempCondVal} onChange={(e)=>setTempCondVal(e.target.value)} placeholder="Valor" className="w-full p-inputtext-sm" disabled={isOpNulo(tempCondOp)} /></div>
                                                     </div>
 
-                                                    {/* Botonera + Guardar */}
+                                                    {/* VISOR + BOTONERA INTEGRADA */}
                                                     <div className="bg-white p-2 border rounded mb-4">
-                                                        <div className="flex gap-2 mb-2">
-                                                            <InputText value={tempFormula} readOnly className="flex-1 font-mono bg-gray-100 p-inputtext-sm border-none" placeholder="Usa botones..." />
-                                                            <Button icon="pi pi-times" className="p-button-text p-button-danger p-0 w-8" onClick={clearFormula} />
-                                                            {/* BOTÓN GUARDAR AQUÍ, DENTRO DEL GRUPO */}
-                                                            <Button icon="pi pi-check" className="p-button-success w-10" onClick={addFormulaToSegment} tooltip="Guardar Fórmula" />
+                                                        <div className="flex gap-2 mb-2 items-center">
+                                                            <div className="p-inputgroup flex-1">
+                                                                <InputText value={tempFormula} readOnly className="w-full font-mono bg-gray-100 p-inputtext-sm border-none" placeholder="Usa botones ->" />
+                                                                <Button icon="pi pi-times" className="p-button-danger" onClick={clearFormula} tooltip="Limpiar" />
+                                                            </div>
+                                                            {/* BOTÓN GUARDAR INTEGRADO */}
+                                                            <Button icon="pi pi-check" className="p-button-success" onClick={addFormulaToSegment} tooltip="Guardar Cálculo" />
                                                         </div>
                                                         <div className="flex flex-wrap gap-1 justify-between items-center">
                                                             <div className="flex gap-1">
-                                                                <Dropdown value={colToInsert} options={availableColumns} onChange={(e)=>{appendToFormula(e.value); setColToInsert(null);}} placeholder="Col..." className="w-32 p-inputtext-sm" filter />
-                                                                {['+', '-', '*', '/', '(', ')'].map(op => <Button key={op} label={op} size="small" outlined className="p-0 w-8 h-8" onClick={() => appendToFormula(op)} />)}
+                                                                <Dropdown value={colToInsert} options={availableColumns} onChange={(e)=>{appendToFormula(e.value); setColToInsert(null);}} placeholder="Insertar Col..." className="w-40 p-inputtext-sm" filter />
+                                                                {['+', '-', '*', '/', '(', ')'].map(op => <Button key={op} label={op} size="small" outlined className="p-1 w-8 text-center" onClick={() => appendToFormula(op)} />)}
                                                             </div>
                                                             <div className="flex items-center border rounded px-1"><InputNumber value={tempConstante} onValueChange={(e)=>setTempConstante(e.value)} placeholder="#" inputClassName="w-16 p-1 text-sm text-center border-none" /><Button icon="pi pi-plus" text size="small" onClick={()=>{if(tempConstante!==null)appendToFormula(tempConstante.toString());setTempConstante(null)}}/></div>
                                                         </div>
                                                     </div>
-
-                                                    {/* TABLA ABAJO DE TODO */}
+                                                    
+                                                    {/* TABLA DE RESULTADOS */}
                                                     <div className="mt-4 border rounded overflow-hidden">
                                                         <table className="w-full text-sm text-left bg-white">
                                                             <thead className="bg-gray-100 text-gray-600 border-b">

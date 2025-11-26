@@ -4,6 +4,12 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
 # --- Modelos para Datos ---
+class VisorDataRequest(BaseModel):
+    """
+    Lo que el frontend envía para pedir datos filtrados de un cliente.
+    """
+    cliente: str
+    filtros: Dict[str, Any] = {}
 
 class DataRequest(BaseModel):
     """Lo que el frontend envía al pedir datos"""
@@ -132,3 +138,5 @@ class GruposUnicosRequest(BaseModel):
     """
     id_estrategia_base: int
     columna_division: str    
+
+    
