@@ -1,257 +1,104 @@
-import React, { useState, useEffect } from "react";
-import axios from "axios";
-import { useAuth } from "../context/AuthContext.jsx";
-
-// Componentes de Gráficos (Recharts)
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line, ResponsiveContainer, Legend } from "recharts";
-
-// Componentes de UI (PrimeReact)
+import React, { useState, useMemo } from 'react';
+import { useAuth } from '../context/AuthContext.jsx';
 import { Card } from 'primereact/card';
-import { Dropdown } from 'primereact/dropdown';
-import { ProgressSpinner } from 'primereact/progressspinner';
-import { Calendar } from 'primereact/calendar'; // <-- 1. IMPORTAR CALENDAR
-import { Button } from 'primereact/button';     // <-- 1. IMPORTAR BUTTON
+import { Dropdown } from 'primereact/dropdown'; // Mantenemos por si acaso, aunque usamos sidebar
 
-// Estilos y Configuración
-const API_REPORTES_URL = '/api/reportes';
-
-// --- Helper para formatear fechas ---
-const formatDateToParam = (date) => {
-    if (!date) return "";
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
-    return `${year}${month}${day}`; // Retorna YYYYMMDD
-};
-
-const formatPeriodoToParam = (date) => {
-    if (!date) return "";
-    const year = date.getFullYear();
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    return `${year}${month}`; // Retorna YYYYMM
-};
+// Importamos los reportes
+import FunnelCobranza from '../components/reports/FunnelCobranza.jsx';
+import ReporteCampanas from '../components/reports/ReporteCampanas.jsx';
 
 export default function ReportesPage() {
-  const { token } = useAuth();
-  
-  // --- ESTADOS DE FILTROS ---
-  // Inicializamos con la fecha actual o el 1ro del mes
-  const [fechaInicio, setFechaInicio] = useState(new Date()); 
-  const [periodo, setPeriodo] = useState(new Date()); 
-  
-  const [cartera, setCartera] = useState("Todas");
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(false);
+    const { user } = useAuth();
+    const [activeReportId, setActiveReportId] = useState('funnel');
 
-  // Función de carga de datos
-  const fetchData = async () => {
-    if (!token || !fechaInicio || !periodo) return;
+    // Configuración de los reportes disponibles
+    const availableReports = useMemo(() => {
+        const reports = [
+            { 
+                id: 'funnel', 
+                label: 'Funnel de Cobranza', 
+                icon: 'pi pi-filter', 
+                description: 'Rendimiento del bot y conversiones',
+                component: <FunnelCobranza /> 
+            },
+        ];
 
-    setLoading(true);
-    try {
-      const response = await axios.get(`${API_REPORTES_URL}/funnel`, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: {
-          // Convertimos los objetos Date a strings YYYYMMDD / YYYYMM
-          fecha_inicio: formatDateToParam(fechaInicio),
-          periodo: formatPeriodoToParam(periodo),
-        },
-      });
-      setData(response.data);
-    } catch (error) {
-      console.error("Error al obtener datos del backend:", error);
-      setData([]); // Limpiar datos en caso de error
-    } finally {
-      setLoading(false);
-    }
-  };
+        // Reportes exclusivos de ADMIN
+        if (user && user.rol === 'admin') {
+            reports.push({ 
+                id: 'campanas', 
+                label: 'Auditoría de Campañas', 
+                icon: 'pi pi-list', 
+                description: 'Historial de rechazos y gestión masiva',
+                component: <ReporteCampanas /> 
+            });
+        }
 
-  // Cargar datos al montar o al cambiar token
-  useEffect(() => {
-    fetchData(); 
-    // Nota: Podrías añadir [fechaInicio, periodo] aquí si quieres auto-refresco,
-    // pero para reportes es mejor usar el botón "Consultar".
-  }, [token]); 
+        return reports;
+    }, [user]);
 
-  // --- LÓGICA DE PROCESAMIENTO DE DATOS ---
-  // (Igual que antes)
-  const filteredData = cartera === "Todas" ? data : data.filter(d => d.CARTERA === cartera);
+    // Obtener el componente activo
+    const activeComponent = availableReports.find(r => r.id === activeReportId)?.component;
+    const activeTitle = availableReports.find(r => r.id === activeReportId)?.label;
 
-  const resumen = filteredData.reduce(
-    (acc, curr) => {
-      acc.gestiones += curr["Q.Gestiones"] || 0;
-      acc.deudores += curr["Q.Deudores"] || 0;
-      acc.cd += curr["Q.CD"] || 0;
-      acc.compromisos += curr["Q.Compromisos"] || 0;
-      return acc;
-    },
-    { gestiones: 0, deudores: 0, cd: 0, compromisos: 0 }
-  );
-
-  const funnelData = [
-    { etapa: "Gestiones", valor: resumen.gestiones, fill: "#3b82f6" },
-    { etapa: "Deudores", valor: resumen.deudores, fill: "#6366f1" },
-    { etapa: "Contactos Directos", valor: resumen.cd, fill: "#10b981" },
-    { etapa: "Compromisos", valor: resumen.compromisos, fill: "#f59e0b" },
-  ];
-
-  const tendenciaMap = {};
-  filteredData.forEach(d => {
-      if (!tendenciaMap[d.FECHA]) {
-          tendenciaMap[d.FECHA] = { fecha: d.FECHA, gestiones: 0, cd: 0, compromisos: 0 };
-      }
-      tendenciaMap[d.FECHA].gestiones += d["Q.Gestiones"];
-      tendenciaMap[d.FECHA].cd += d["Q.CD"];
-      tendenciaMap[d.FECHA].compromisos += d["Q.Compromisos"];
-  });
-  const tendencia = Object.values(tendenciaMap).sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-
-  const carterasMap = {};
-  data.forEach((d) => {
-    const c = d.CARTERA;
-    if (!carterasMap[c]) carterasMap[c] = { cartera: c, gestiones: 0, cd: 0, compromisos: 0 };
-    carterasMap[c].gestiones += d["Q.Gestiones"];
-    carterasMap[c].cd += d["Q.CD"];
-    carterasMap[c].compromisos += d["Q.Compromisos"];
-  });
-  const carterasData = Object.values(carterasMap);
-  const carteraOptions = [{label: "Todas", value: "Todas"}, ...carterasData.map(c => ({label: c.cartera, value: c.cartera}))];
-
-
-  // --- RENDER ---
-  return (
-    <div className="w-full animate-fade-in">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-        <h1 className="text-3xl font-bold text-gray-800">Funnel de Cobranza - Bot</h1>
-        
-        {/* BARRA DE FILTROS */}
-        <div className="flex flex-wrap items-end gap-3 bg-white p-3 rounded shadow-sm border border-gray-200">
-            <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-gray-500">Periodo</label>
-                {/* Selector de MES/AÑO */}
-                <Calendar 
-                    value={periodo} 
-                    onChange={(e) => setPeriodo(e.value)} 
-                    view="month" 
-                    dateFormat="mm/yy" 
-                    showIcon 
-                    className="w-32"
-                    inputClassName="p-inputtext-sm"
-                />
-            </div>
-            <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-gray-500">Fecha Inicio</label>
-                {/* Selector de DÍA */}
-                <Calendar 
-                    value={fechaInicio} 
-                    onChange={(e) => setFechaInicio(e.value)} 
-                    dateFormat="dd/mm/yy" 
-                    showIcon 
-                    className="w-36"
-                    inputClassName="p-inputtext-sm"
-                />
-            </div>
+    return (
+        <div className="flex flex-col md:flex-row w-full min-h-[calc(100vh-100px)] gap-4 p-2 animate-fade-in">
             
-            <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-gray-500">Cartera</label>
-                <Dropdown 
-                    value={cartera} 
-                    options={carteraOptions} 
-                    onChange={(e) => setCartera(e.value)} 
-                    className="w-40 md:w-48" 
+            {/* --- SIDEBAR DE NAVEGACIÓN (IZQUIERDA) --- */}
+            <div className="w-full md:w-64 flex-shrink-0">
+                <Card className="h-full shadow-sm border border-gray-200 sticky top-4">
+                    <div className="mb-4 px-2">
+                        <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                            <i className="pi pi-chart-bar text-blue-600"></i>
+                            Reportes
+                        </h2>
+                        <p className="text-xs text-gray-500">Seleccione una opción</p>
+                    </div>
                     
-                />
+                    <div className="flex flex-col gap-2">
+                        {availableReports.map((report) => {
+                            const isActive = activeReportId === report.id;
+                            return (
+                                <button
+                                    key={report.id}
+                                    onClick={() => setActiveReportId(report.id)}
+                                    className={`
+                                        w-full text-left px-4 py-3 rounded-lg transition-all duration-200 flex items-center gap-3 group
+                                        ${isActive 
+                                            ? 'bg-blue-100 text-blue-800 border-l-4 border-blue-600 shadow-sm font-bold' 
+                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                        }
+                                    `}
+                                >
+                                    <i className={`${report.icon} text-lg ${isActive ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-600'}`}></i>
+                                    <div>
+                                        <div className="text-sm">{report.label}</div>
+                                        {/* Descripción pequeña opcional */}
+                                        {isActive && (
+                                            <div className="text-[10px] font-normal text-blue-600 mt-1">
+                                                {report.description}
+                                            </div>
+                                        )}
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </Card>
             </div>
 
-            <Button label="Consultar" icon="pi pi-search" onClick={fetchData} size="small" disabled={loading} />
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-            <ProgressSpinner />
-        </div>
-      ) : (
-        <>
-            {data.length === 0 ? (
-                <div className="p-10 text-center text-gray-500 bg-gray-50 rounded border border-dashed border-gray-300">
-                    <i className="pi pi-info-circle text-4xl mb-2 text-gray-400"></i>
-                    <p>No hay datos disponibles para el periodo seleccionado.</p>
+            {/* --- AREA DE CONTENIDO (DERECHA) --- */}
+            <div className="flex-1 min-w-0">
+                {/* Header del Reporte Actual */}
+                <div className="mb-4 pb-2 border-b border-gray-200 flex justify-between items-center">
+                    <h1 className="text-2xl font-bold text-gray-800">{activeTitle}</h1>
                 </div>
-            ) : (
-                <>
-                    {/* KPIs principales */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                        {[
-                        { title: "Gestiones", value: resumen.gestiones, color: "text-blue-600", icon: "pi pi-send" },
-                        { title: "Deudores", value: resumen.deudores, color: "text-indigo-600", icon: "pi pi-users" },
-                        { title: "Contactos Directos", value: resumen.cd, color: "text-green-600", icon: "pi pi-phone" },
-                        { title: "Compromisos", value: resumen.compromisos, color: "text-yellow-600", icon: "pi pi-check-circle" },
-                        ].map((kpi) => (
-                        <Card key={kpi.title} className="shadow-sm border border-gray-100">
-                            <div className="flex justify-between items-center">
-                                <div>
-                                    <div className="text-gray-500 font-medium text-sm uppercase">{kpi.title}</div>
-                                    <div className={`text-3xl font-bold ${kpi.color}`}>{kpi.value.toLocaleString()}</div>
-                                </div>
-                                <i className={`${kpi.icon} text-2xl opacity-20`}></i>
-                            </div>
-                        </Card>
-                        ))}
-                    </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                        {/* Funnel */}
-                        <Card title="Embudo de Conversión" className="shadow-sm h-full">
-                            <ResponsiveContainer width="100%" height={300}>
-                                <BarChart data={funnelData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                <XAxis type="number" />
-                                <YAxis type="category" dataKey="etapa" width={120} />
-                                <Tooltip formatter={(value) => value.toLocaleString()} />
-                                <Bar dataKey="valor" fill="#8884d8" radius={[0, 4, 4, 0]} barSize={40}>
-                                    {/* Colores personalizados por barra (Recharts usa el fill del data si no se especifica aquí) */}
-                                </Bar>
-                                </BarChart>
-                            </ResponsiveContainer>
-                        </Card>
-
-                        {/* Tendencia temporal */}
-                        <Card title="Evolución Diaria" className="shadow-sm h-full">
-                            <ResponsiveContainer width="100%" height={300}>
-                                <LineChart data={tendencia} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis dataKey="fecha" tickFormatter={(t) => t.substring(5)} /> 
-                                <YAxis />
-                                <Tooltip />
-                                <Legend />
-                                <Line type="monotone" dataKey="gestiones" name="Gestiones" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                                <Line type="monotone" dataKey="cd" name="Cont. Directos" stroke="#10b981" strokeWidth={2} />
-                                <Line type="monotone" dataKey="compromisos" name="Compromisos" stroke="#f59e0b" strokeWidth={2} />
-                                </LineChart>
-                            </ResponsiveContainer>
-                        </Card>
-                    </div>
-
-                    {/* Comparación por cartera */}
-                    <Card title="Desempeño por Cartera" className="shadow-sm">
-                        <ResponsiveContainer width="100%" height={350}>
-                            <BarChart data={carterasData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="cartera" />
-                            <YAxis />
-                            <Tooltip />
-                            <Legend />
-                            <Bar dataKey="gestiones" name="Gestiones" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="cd" name="Cont. Directos" fill="#10b981" radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="compromisos" name="Compromisos" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </Card>
-                </>
-            )}
-        </>
-      )}
-    </div>
-  );
+                {/* Renderizado del Componente */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1">
+                    {activeComponent}
+                </div>
+            </div>
+        </div>
+    );
 }
