@@ -9,7 +9,8 @@ from sqlalchemy.engine import Connection
 logger = logging.getLogger(__name__)
 
 # Ruta compartida (Asegúrate de que sea accesible por SQL Server)
-SHARED_BULK_DIR = r"\\192.168.168.96\b2c\IT\CARGAS\DATOS\TMP_ARTURO_ASCANIO"
+# SHARED_BULK_DIR = r"\\192.168.168.96\b2c\IT\CARGAS\DATOS\TMP_ARTURO_ASCANIO"
+SHARED_BULK_DIR = r"archbulk"
 
 def bulk_insert_via_csv(
     db_session: Connection, 

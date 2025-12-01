@@ -34,3 +34,18 @@ def get_funnel_data(
     except Exception as e:
         logger.error(f"Error en endpoint funnel: {e}")
         raise HTTPException(status_code=500, detail="Error al obtener datos del reporte.")
+    
+
+@router.get("/rechazos")
+async def get_rechazos(fecha_desde: str, fecha_hasta: str, cliente: str = None, db: DBSession = None, user: str = Depends(get_current_user_email)):
+    try:
+        return db_reportes_operations.obtener_rechazos_historicos(db, fecha_desde, fecha_hasta, cliente)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/gestion")
+async def get_gestion(fecha_desde: str, fecha_hasta: str, cliente: str = None, db: DBSession = None, user: str = Depends(get_current_user_email)):
+    try:
+        return db_reportes_operations.obtener_gestion_diaria(db, fecha_desde, fecha_hasta, cliente)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))    

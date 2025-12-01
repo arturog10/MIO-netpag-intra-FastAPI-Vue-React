@@ -11,6 +11,7 @@ from app.database import get_db_session
 # Importar pipelines especializados
 from app.pipelines import validaciones_pipeline
 from app.pipelines import calculos_pipeline 
+from app.pipelines import proveedores_logic 
 from app import db_bulk_operations
 
 logger = logging.getLogger(__name__)
@@ -24,22 +25,23 @@ def verificar_cancelacion(task_id: str):
     if task and task.get("status") == "cancelled":
         raise InterruptedError("Tarea cancelada por el usuario.")
 
+def actualizar_paso(task_id: str, mensaje: str):
+    """Actualiza el mensaje de progreso para que el frontend lo lea."""
+    if task_id in tasks_db:
+        tasks_db[task_id]["step"] = mensaje
+
 def formatear_miles(val):
-    """Convierte 10000 -> 100.000 (Formato visual con punto)"""
     try:
-        if pd.isna(val) or val == "": return ""
+        if pd.isna(val) or str(val).strip() == "": return ""
         f = float(val)
         return "{:,.0f}".format(f).replace(",", ".")
     except:
         return val
 
 def aplicar_formato_visual(df_raw):
-    """Aplica formato de miles a TODAS las columnas numéricas"""
     if df_raw.empty: return df_raw
     df_fmt = df_raw.copy()
-    # Evitar formatear columnas que son IDs o códigos
     cols_ignorar = ['id', 'rut', 'fono', 'tel', 'celular', 'codigo', 'code', 'ic', 'idempresa']
-    
     for col in df_fmt.select_dtypes(include=['number']).columns:
         if any(x in col.lower() for x in cols_ignorar):
             continue
@@ -64,6 +66,7 @@ def obtener_registros_finales_masiv_dia(cliente: str, db_session_b2c) -> pd.Data
 # --- PIPELINE PRINCIPAL ---
 def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
     logger.info(f"[Task {task_id}] Iniciando pipeline completo...")
+    actualizar_paso(task_id, "Iniciando proceso...")
     
     df_rechazados_total = pd.DataFrame()
     df_validado = pd.DataFrame()
@@ -78,7 +81,7 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
         db_session_b2c = next(db_gen_b2c)
         
         # --- PASO 1: CARGAR CONFIGURACIÓN ---
-        logger.info(f"[Task {task_id}] Paso 1: Cargando configuración...")
+        actualizar_paso(task_id, "Cargando configuración de la plantilla...")
         plantilla_dict = db_plantillas_operations.cargar_plantilla_db(db_session_b2c, id_plantilla)
         estrategia_dict = db_operations.cargar_una_estrategia_db(db_session_b2c, plantilla_dict["id_estrategia_base"])
         
@@ -90,6 +93,7 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
 
         reglas_proc_json = json.loads(plantilla_dict["reglas_procesamiento_json"] or "{}")
         proveedor_seleccionado = reglas_proc_json.get("proveedor")
+        mensaje_sms_template = reglas_proc_json.get("mensaje_sms_template", "")
         
         cols_visibles_raw = json.loads(estrategia_dict["columnas_visibles"] or "[]")
         lista_cols_finales = [c['field'].lower() for c in cols_visibles_raw] if cols_visibles_raw else []
@@ -103,23 +107,22 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
         if tipo_campana in ["MAIL", "MAIL_INF"] and email_mode == "unica" and email_col:
             if email_col.lower() in lista_cols_finales:
                 cols_mails_estrategia = [email_col.lower()]
-                logger.info(f"[Task {task_id}] Modo Email Único: {cols_mails_estrategia}")
 
         fono_mode = reglas_proc_json.get("estrategia_fono", "jerarquia")
         fono_col = reglas_proc_json.get("columna_fono_elegida")
         if tipo_campana == "SMS" and fono_mode == "unica" and fono_col:
             if fono_col.lower() in lista_cols_finales:
                 cols_fonos_estrategia = [fono_col.lower()]
-                logger.info(f"[Task {task_id}] Modo Fono Único: {cols_fonos_estrategia}")
 
         now = datetime.now()
         fecha_str = now.strftime("%d%m%Y") 
         hora_str = now.strftime("%H%M").lstrip('0') 
         prefijo_archivo = f"{cliente_codigo}_{fecha_str}_{hora_str}"
 
-        # --- PASO 2: EXTRACCIÓN (BD Operativa) ---
+        # --- PASO 2: EXTRACCIÓN ---
         verificar_cancelacion(task_id)
-        logger.info(f"[Task {task_id}] Paso 2: Extrayendo datos (Cliente: {cliente_codigo})...")
+        actualizar_paso(task_id, f"Extrayendo datos del cliente {cliente_codigo}...")
+        
         info_tabla = db_operations._get_table_info("cliente_table_map", cliente_codigo)
         db_gen_datos = get_db_session(info_tabla["db_key"])
         db_session_datos = next(db_gen_datos)
@@ -136,6 +139,7 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
             df_validado = df_completo.copy()
 
             # --- FASE A: FILTROS DE RUT ---
+            actualizar_paso(task_id, "Validando gestionados hoy y segmento...")
             df_validado, df_rech_hoy = validaciones_pipeline.validar_gestionados_hoy(
                 df_validado, cliente_codigo, db_session_b2c, task_id 
             )
@@ -153,19 +157,15 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
             verificar_cancelacion(task_id)
 
             # --- FASE B: PROCESAMIENTO DE CONTACTOS ---
+            actualizar_paso(task_id, "Procesando contactos (Inhibiciones y Consolidación)...")
+            
             if tipo_campana in ["MAIL", "MAIL_INF"]:
-                # 1. Inhibición SP
                 df_validado, _ = validaciones_pipeline.validar_inhibicion_con_sp(
                     df_validado, cliente_codigo, tipo_campana, db_session_b2c, task_id, cols_mails_estrategia
                 )
-                
-                # --- COMMIT CRÍTICO: Guardar logs de inhibición mail INMEDIATAMENTE ---
                 db_session_b2c.commit()
-                # --------------------------------------------------------------------
-
                 verificar_cancelacion(task_id)
 
-                # 2. Consolidación
                 df_validado, df_rech_mail = validaciones_pipeline.procesar_emails_jerarquia(
                     df_validado, task_id, cols_mail_estrategia=cols_mails_estrategia
                 )
@@ -173,37 +173,30 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
                     df_rechazados_total = pd.concat([df_rechazados_total, df_rech_mail])
 
             elif tipo_campana == "SMS":
-                # 1. Normalizar
                 df_validado = validaciones_pipeline.normalizar_telefonos(
                     df_validado, task_id, cols_fono_estrategia=cols_fonos_estrategia
                 )
                 
-                # 2. Inhibición SP
                 df_validado, _ = validaciones_pipeline.validar_inhibicion_con_sp(
                     df_validado, cliente_codigo, tipo_campana, db_session_b2c, task_id, cols_fonos_estrategia
                 )
-                
-                # --- COMMIT CRÍTICO: Guardar logs de inhibición sms INMEDIATAMENTE ---
                 db_session_b2c.commit()
-                # -------------------------------------------------------------------
-
                 verificar_cancelacion(task_id)
 
-                # 3. Consolidación SMS
                 df_validado, df_rech_sms_cons = validaciones_pipeline.procesar_telefonos_jerarquia(
                     df_validado, task_id, cols_fono_estrategia=cols_fonos_estrategia
                 )
                 if not df_rech_sms_cons.empty:
                      df_rechazados_total = pd.concat([df_rechazados_total, df_rech_sms_cons])
 
-                # 4. Validación Técnica
                 df_validado, df_rech_tec = validaciones_pipeline.validar_tecnicamente(
                     df_validado, tipo_campana, task_id
                 )
                 if not df_rech_tec.empty:
                     df_rechazados_total = pd.concat([df_rechazados_total, df_rech_tec])
 
-            # --- FASE C: DUPLICADOS FINALES ---
+            # --- FASE C: DUPLICADOS ---
+            actualizar_paso(task_id, "Eliminando registros duplicados...")
             df_validado, df_rech_dup = validaciones_pipeline.validar_duplicados(
                 df_validado, tipo_campana, cliente_codigo, task_id
             )
@@ -215,24 +208,21 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
 
         verificar_cancelacion(task_id)
 
-        # --- PASO 6: CARGA FINAL EN 'masiv_dia' ---
-        logger.info(f"[Task {task_id}] Paso 6: Cargando {len(df_validado)} registros válidos a 'masiv_dia'...")
+        # --- PASO 6: CARGA FINAL ---
+        actualizar_paso(task_id, f"Cargando {len(df_validado)} registros válidos a base de datos...")
         db_bulk_operations.bulk_insert_final(df_validado, cliente_codigo, tipo_campana, task_id)
 
         verificar_cancelacion(task_id)
 
-        # --- PASO 7: GUARDAR RECHAZADOS (CSV) ---
-        logger.info(f"[Task {task_id}] Paso 7: Guardando reporte de rechazados...")
+        # --- PASO 7: GUARDAR RECHAZADOS ---
+        actualizar_paso(task_id, "Guardando reporte de rechazados...")
         output_dir = "campanas_generadas"
         output_dir = os.path.join(output_dir, cliente_codigo, fecha_str)
+        if not os.path.exists(output_dir): os.makedirs(output_dir, exist_ok=True)
         
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir, exist_ok=True)
-        
-        archivos_generados = []
         if not df_rechazados_total.empty:
-            nombre_rechazados = f"{prefijo_archivo}_RECHAZADOS.csv"
-            ruta_rechazos = os.path.join(output_dir, nombre_rechazados)
+            n_rech = f"{prefijo_archivo}_RECHAZADOS.csv"
+            path_rech = os.path.join(output_dir, n_rech)
             
             cols_base = ['motivo_rechazo', 'rut', 'idempresa', 'mail', 'telefono']
             cols_rech = [c.lower() for c in cols_base]
@@ -245,123 +235,129 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
             for c in ['rut', 'motivo_rechazo']:
                 if c not in df_rechazados_total.columns: df_rechazados_total[c] = ""
             
-            # Aplicar formato visual
             df_rech_fmt = aplicar_formato_visual(df_rechazados_total[cols_existentes])
-            
-            df_rech_fmt.to_csv(ruta_rechazos, index=False, sep=';', encoding='utf-8-sig')
-            archivos_generados.append(f"{cliente_codigo}/{fecha_str}/{nombre_rechazados}")
+            df_rech_fmt.to_csv(path_rech, index=False, sep=';', encoding='utf-8-sig')
+            archivos_generados.append(f"{cliente_codigo}/{fecha_str}/{n_rech}")
 
-        # --- PASO 8: DIVISIÓN, CÁLCULO Y PROVEEDOR ---
-        logger.info(f"[Task {task_id}] Paso 8: Procesando y generando archivos finales...")
+            # Guardar en BD
+            try:
+                df_db = df_rechazados_total.copy()
+                df_db['fecha_proceso'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                df_db['cliente'] = cliente_codigo
+                df_db['task_id'] = task_id
+                df_db['archivo_origen'] = n_rech
+                
+                if 'rut' not in df_db.columns: df_db['rut'] = df_db.get('idempresa', '')
+                if 'telefono' not in df_db.columns: df_db['telefono'] = ''
+                if 'mail' not in df_db.columns: df_db['mail'] = ''
+                if 'motivo_rechazo' not in df_db.columns: df_db['motivo_rechazo'] = 'Desconocido'
+
+                cols_db_ordenadas = ['fecha_proceso', 'cliente', 'rut', 'telefono', 'mail', 'motivo_rechazo', 'archivo_origen', 'task_id']
+                df_db_final = df_db[cols_db_ordenadas].fillna('')
+                
+                db_bulk_operations.bulk_insert_via_csv(db_session_b2c, df_db_final, "B2C.dbo.RechazosHistoricos", f"rech_{task_id}", is_temp_table=False)
+                db_session_b2c.commit()
+            except Exception as e_db:
+                logger.error(f"Error guardando rechazos DB: {e_db}")
+
+        # --- PASO 8: DIVISIÓN Y CÁLCULO ---
+        actualizar_paso(task_id, "Aplicando cálculos, segmentación y generando archivos finales...")
         
         cols_div = [c.lower() for c in (reglas_proc_json.get("columnas_division") or [])]
         if isinstance(cols_div, str): cols_div = [cols_div]
         cols_validas_div = [c for c in cols_div if c in df_validado.columns]
-        
         reglas_segmentacion = reglas_proc_json.get("segmentacion", [])
 
         def guardar_grupo(df_g, sufijo_nombre, columnas_extra=[]):
             nombre_final = f"{prefijo_archivo}_{sufijo_nombre}.csv"
             ruta = os.path.join(output_dir, nombre_final)
             
-            # 1. Lógica Proveedor
-            from app.pipelines import proveedores_logic
-            df_final = proveedores_logic.aplicar_logica_proveedor(df_g.copy(), proveedor_seleccionado)
+            df_final = proveedores_logic.aplicar_logica_proveedor(
+                df_g.copy(), proveedor_seleccionado, 
+                mensaje_template=mensaje_sms_template, cliente_codigo=cliente_codigo
+            )
 
             cols_exportar = []
-            if lista_cols_finales:
-                cols_norm = {c.lower(): c for c in df_final.columns}
-                for c_req in lista_cols_finales:
-                    if "mail" in c_req and tipo_campana in ["MAIL", "MAIL_INF"]:
-                         if "mail" in cols_norm and cols_norm["mail"] not in cols_exportar:
-                             cols_exportar.append(cols_norm["mail"])
-                    elif c_req in cols_norm:
-                        cols_exportar.append(cols_norm[c_req])
-                
-                for cc in columnas_extra:
-                    if cc and cc in df_final.columns and cc not in cols_exportar:
-                        cols_exportar.append(cc)
-                
-                if proveedor_seleccionado == "FIDELIZADOR" and "id_fidelizador" in df_final.columns:
-                     if "id_fidelizador" not in cols_exportar: cols_exportar.insert(0, "id_fidelizador")
-
-                if not cols_exportar: cols_exportar = df_final.columns.tolist()
-            else:
+            if proveedor_seleccionado:
                 cols_exportar = df_final.columns.tolist()
+            else:
+                if lista_cols_finales:
+                    cn = {c.lower(): c for c in df_final.columns}
+                    for r in lista_cols_finales:
+                        if "mail" in r and tipo_campana in ["MAIL", "MAIL_INF"]:
+                            if "mail" in cn and cn["mail"] not in cols_exportar: cols_exportar.append(cn["mail"])
+                        elif "fono" in r and tipo_campana == "SMS":
+                             if "telefono" in cn and cn["telefono"] not in cols_exportar: cols_exportar.append(cn["telefono"])
+                        elif r in cn: cols_exportar.append(cn[r])
+                    for e in columnas_extra: 
+                        if e in df_final.columns and e not in cols_exportar: cols_exportar.append(e)
+                    if not cols_exportar: cols_exportar = df_final.columns.tolist()
+                else: cols_exportar = df_final.columns.tolist()
             
-            # 2. Formato Visual
             df_to_save = aplicar_formato_visual(df_final[cols_exportar])
-            
             df_to_save.to_csv(ruta, index=False, sep=';', encoding='utf-8-sig')
             return f"{cliente_codigo}/{fecha_str}/{nombre_final}"
 
-        def procesar_y_guardar(df_bloque, nombre_base):
-            archivos = []
-            
+        def procesar(bloque, base):
+            arch = []
             if not reglas_segmentacion or (len(reglas_segmentacion) == 1 and reglas_segmentacion[0].get('id') == 'base'):
-                seg_base = reglas_segmentacion[0] if reglas_segmentacion else {}
-                reglas_calc = {"formulas": seg_base.get("formulas", []), "columnas_estaticas": seg_base.get("columnas_estaticas", [])}
-                
-                df_proc, nuevas_cols = calculos_pipeline.procesar_calculos(df_bloque.copy(), reglas_calc, lista_cols_finales)
-                archivos.append(guardar_grupo(df_proc, nombre_base, nuevas_cols))
-                return archivos
+                sb = reglas_segmentacion[0] if reglas_segmentacion else {}
+                rc = {"formulas": sb.get("formulas", []), "columnas_estaticas": sb.get("columnas_estaticas", [])}
+                dp, nc = calculos_pipeline.procesar_calculos(bloque.copy(), rc, lista_cols_finales)
+                arch.append(guardar_grupo(dp, base, nc))
+                return arch
 
-            registros_restantes = df_bloque.copy()
-            
-            for regla in reglas_segmentacion:
-                sufijo = regla.get("sufijo", "SEG")
-                reglas_calc = { "formulas": regla.get("formulas", []), "columnas_estaticas": regla.get("columnas_estaticas", []) }
-                condiciones = regla.get("condiciones", [])
+            restante = bloque.copy()
+            for r in reglas_segmentacion:
+                suf = r.get("sufijo", "SEG")
+                rc = {"formulas": r.get("formulas", []), "columnas_estaticas": r.get("columnas_estaticas", [])}
+                conds = r.get("condiciones", [])
                 
-                if regla.get("id") == 'else' or regla.get("condicion") == 'else':
-                     if not registros_restantes.empty:
-                        df_proc, nuevas = calculos_pipeline.procesar_calculos(registros_restantes.copy(), reglas_calc, lista_cols_finales)
-                        archivos.append(guardar_grupo(df_proc, f"{nombre_base}_{sufijo}", nuevas))
-                     registros_restantes = pd.DataFrame()
+                if r.get("id") == 'else' or r.get("condicion") == 'else':
+                     if not restante.empty:
+                        dp, nc = calculos_pipeline.procesar_calculos(restante.copy(), rc, lista_cols_finales)
+                        arch.append(guardar_grupo(dp, f"{base}_{suf}", nc))
+                     restante = pd.DataFrame()
                      continue
 
-                mask_total = None
-                for cond in condiciones:
-                    col = cond.get("columna", "").lower().strip()
-                    op = cond.get("operador", "")
-                    val = cond.get("valor", "")
-                    mask_cond = None
+                mask = None
+                for c in conds:
+                    col = c.get("columna", "").lower().strip()
+                    op = c.get("operador", "")
+                    val = c.get("valor", "")
+                    m = None
                     try:
-                        if op == "==": mask_cond = registros_restantes[col].astype(str) == str(val)
-                        elif op == "!=": mask_cond = registros_restantes[col].astype(str) != str(val)
-                        elif op == ">": mask_cond = pd.to_numeric(registros_restantes[col], errors='coerce') > float(val)
-                        elif op == "<": mask_cond = pd.to_numeric(registros_restantes[col], errors='coerce') < float(val)
-                        elif op == ">=": mask_cond = pd.to_numeric(registros_restantes[col], errors='coerce') >= float(val)
-                        elif op == "<=": mask_cond = pd.to_numeric(registros_restantes[col], errors='coerce') <= float(val)
-                        elif op == "contiene": mask_cond = registros_restantes[col].astype(str).str.contains(str(val), case=False, na=False)
-                        elif op == "es_nulo": mask_cond = registros_restantes[col].isna() | (registros_restantes[col].astype(str).str.strip() == "") | (registros_restantes[col].astype(str).str.lower() == "nan")
-                        elif op == "no_es_nulo": mask_cond = registros_restantes[col].notna() & (registros_restantes[col].astype(str).str.strip() != "") & (registros_restantes[col].astype(str).str.lower() != "nan")
+                        if op=="==": m = restante[col].astype(str) == str(val)
+                        elif op=="!=": m = restante[col].astype(str) != str(val)
+                        elif op==">": m = pd.to_numeric(restante[col], errors='coerce') > float(val)
+                        elif op=="<": m = pd.to_numeric(restante[col], errors='coerce') < float(val)
+                        elif op==">=": m = pd.to_numeric(restante[col], errors='coerce') >= float(val)
+                        elif op=="<=": m = pd.to_numeric(restante[col], errors='coerce') <= float(val)
+                        elif op=="contiene": m = restante[col].astype(str).str.contains(str(val), case=False, na=False)
+                        elif op=="es_nulo": m = restante[col].isna() | (restante[col].astype(str).str.strip() == "") | (restante[col].astype(str).str.lower() == "nan")
+                        elif op=="no_es_nulo": m = restante[col].notna() & (restante[col].astype(str).str.strip() != "") & (restante[col].astype(str).str.lower() != "nan")
                     except: pass
-
-                    if mask_cond is not None:
-                        mask_total = mask_cond if mask_total is None else (mask_total & mask_cond)
+                    if m is not None: mask = m if mask is None else (mask & m)
                 
-                if mask_total is not None and mask_total.any():
-                     df_seg = registros_restantes[mask_total].copy()
-                     df_proc, nuevas = calculos_pipeline.procesar_calculos(df_seg, reglas_calc, lista_cols_finales)
-                     archivos.append(guardar_grupo(df_proc, f"{nombre_base}_{sufijo}", nuevas))
-                     registros_restantes = registros_restantes[~mask_total]
+                if mask is not None and mask.any():
+                    seg = restante[mask].copy()
+                    dp, nc = calculos_pipeline.procesar_calculos(seg, rc, lista_cols_finales)
+                    arch.append(guardar_grupo(dp, f"{base}_{suf}", nc))
+                    restante = restante[~mask]
 
-            if not registros_restantes.empty:
-                 archivos.append(guardar_grupo(registros_restantes, nombre_base))
-            
-            return archivos
+            if not restante.empty: arch.append(guardar_grupo(restante, base))
+            return arch
 
         if not cols_validas_div or df_validado.empty:
-            if not df_validado.empty:
-                archivos_generados.extend(procesar_y_guardar(df_validado, "GLOBAL"))
+            if not df_validado.empty: archivos_generados.extend(procesar(df_validado, "GLOBAL"))
         else:
-            for nombre_grupo, df_grupo in df_validado.groupby(cols_validas_div):
+            for grp, dfg in df_validado.groupby(cols_validas_div):
                 verificar_cancelacion(task_id)
-                n = "_".join(map(str, nombre_grupo)) if isinstance(nombre_grupo, tuple) else str(nombre_grupo)
-                safe_seg = n.replace("/", "-").replace("\\", "-").replace(" ", "")
-                archivos_generados.extend(procesar_y_guardar(df_grupo, safe_seg))
+                n = "_".join(map(str, grp)) if isinstance(grp, tuple) else str(grp)
+                safe = n.replace("/", "-").replace("\\", "-").replace(" ", "")
+                archivos_generados.extend(procesar(dfg, safe))
 
+        actualizar_paso(task_id, "Finalizado")
         logger.info(f"[Task {task_id}] Pipeline finalizado.")
         resumen = {
             "total_registros": total_inicial,

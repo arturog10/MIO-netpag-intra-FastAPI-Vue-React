@@ -19,6 +19,11 @@
       "db_key": "NEOTEL_ENTEL",
       "schema": "dbo",
       "table": "SCORING_ENTEL"
+    },
+    "LIDER": {
+      "db_key": "b2c_oper",
+      "schema": "dbo",
+      "table": "1009_RTG_0290LIDB_"
     }
   },
   "tabla_estrategias": {
