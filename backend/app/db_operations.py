@@ -172,6 +172,15 @@ def construir_where_dinamico(filtros: Optional[dict] = None, tabla: Optional[Tab
         if operador == "contiene":
             sql_filters.append(func.lower(col_casteada_texto).like(text(f":{safe_param_name}")))
             params[safe_param_name] = f"%{str(valor).lower()}%"
+        
+        elif operador == "comienza_con": # <--- NUEVO
+            sql_filters.append(func.lower(col_casteada_texto).like(text(f":{safe_param_name}")))
+            params[safe_param_name] = f"{str(valor).lower()}%"
+
+        elif operador == "termina_con": # <--- NUEVO
+            sql_filters.append(func.lower(col_casteada_texto).like(text(f":{safe_param_name}")))
+            params[safe_param_name] = f"%{str(valor).lower()}"
+
         elif operador == "es_igual":
             sql_filters.append(col_casteada_texto == text(f":{safe_param_name}"))
             params[safe_param_name] = str(valor)

@@ -49,8 +49,6 @@ def normalizar_telefonos(df: pd.DataFrame, task_id: str, cols_fono_estrategia: L
 def procesar_emails_jerarquia(df: pd.DataFrame, task_id: str, cols_mail_estrategia: List[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Recorre mail1, mail2... buscando el primero válido.
-    - Si es '0' (marcado por SP): Registra rechazo "Inhibido".
-    - Si es inválido/nulo: Pasa al siguiente.
     """
     logger.info(f"[Task {task_id}] [Sub-paso] Procesando jerarquía de correos...")
     
@@ -77,14 +75,13 @@ def procesar_emails_jerarquia(df: pd.DataFrame, task_id: str, cols_mail_estrateg
         if not mask_pendientes.any():
             break 
 
-        # Trabajamos siempre con strings crudos para evitar errores de tipo
         raw_data = df.loc[mask_pendientes, col].astype(str).str.strip()
         
         # Condiciones
         es_inhibido = raw_data == '0'
         es_nulo = raw_data.isin(['nan', 'None', 'NaT', '', 'NULL'])
         
-        # Limpieza (Usando mask para evitar Warning)
+        # Limpieza
         clean_data = raw_data.mask(raw_data.isin(['nan', 'None', 'NaT', '', '0']), np.nan)
         
         # Validación Formato
@@ -100,7 +97,6 @@ def procesar_emails_jerarquia(df: pd.DataFrame, task_id: str, cols_mail_estrateg
         # AUDITORÍA
         mask_dato_existe = (~es_nulo)
         
-        # Separamos el cálculo de la máscara del if
         mask_rech_inhib = mask_pendientes & mask_dato_existe & es_inhibido
         if mask_rech_inhib.any():
             rech = df[mask_rech_inhib].copy()
@@ -114,7 +110,7 @@ def procesar_emails_jerarquia(df: pd.DataFrame, task_id: str, cols_mail_estrateg
             rech['motivo_rechazo'] = f"Formato Inválido ({col})"
             lista_rechazos_parciales.append(rech)
 
-    # Resultados Finales
+    # Resultados
     mask_con_mail = df['mail_final'].notna()
     df_validos = df[mask_con_mail].copy()
     df_validos['mail'] = df_validos['mail_final']
@@ -137,9 +133,10 @@ def procesar_emails_jerarquia(df: pd.DataFrame, task_id: str, cols_mail_estrateg
 
 def procesar_telefonos_jerarquia(df: pd.DataFrame, task_id: str, cols_fono_estrategia: List[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Recorre fono1, fono2... buscando el primero válido (comienza con 56).
+    Recorre fono1, fono2... buscando el primero válido.
+    REGLA SMS: Debe empezar con 569 (Celular). Se descartan fijos (562...).
     """
-    logger.info(f"[Task {task_id}] [Sub-paso] Procesando jerarquía de teléfonos...")
+    logger.info(f"[Task {task_id}] [Sub-paso] Procesando jerarquía de teléfonos (Regla SMS: 569)...")
     
     cols_existentes = df.columns.tolist()
     if cols_fono_estrategia:
@@ -162,12 +159,13 @@ def procesar_telefonos_jerarquia(df: pd.DataFrame, task_id: str, cols_fono_estra
         es_inhibido = raw_data == '0'
         es_nulo = raw_data.isin(['nan', 'None', 'NaT', '', 'NULL'])
         
-        # Validar formato: Debe empezar con 56 y tener largo suficiente
-        es_formato_valido = raw_data.str.startswith('56') & (raw_data.str.len() >= 11)
+        # --- REGLA ACTUALIZADA ---
+        # Debe empezar con 569 y tener largo adecuado (11 o 12 dígitos)
+        es_formato_valido = raw_data.str.startswith('569') & (raw_data.str.len() >= 11)
         
         es_valido = (~es_nulo) & (~es_inhibido) & es_formato_valido
         
-        # Limpieza con Mask
+        # Limpieza
         clean_data = raw_data.mask(raw_data.isin(['nan', 'None', 'NaT', '', '0']), np.nan)
         
         filas_validas = mask_pendientes & (df.index.isin(raw_data[es_valido].index))
@@ -183,10 +181,11 @@ def procesar_telefonos_jerarquia(df: pd.DataFrame, task_id: str, cols_fono_estra
             r[col] = "INHIBIDO (0)"
             lista_rechazos.append(r)
 
+        # Si no es inhibido pero no cumple formato (ej: empieza con 562)
         mask_rech_fmt = mask_pendientes & mask_dato_existe & ~es_inhibido & ~es_formato_valido
         if mask_rech_fmt.any():
             r = df[mask_rech_fmt].copy()
-            r['motivo_rechazo'] = f"Teléfono Inválido ({col})"
+            r['motivo_rechazo'] = f"Teléfono Inválido/Fijo ({col})"
             lista_rechazos.append(r)
 
     # Consolidar
@@ -196,7 +195,7 @@ def procesar_telefonos_jerarquia(df: pd.DataFrame, task_id: str, cols_fono_estra
 
     df_sin_fono = df[~mask_con_fono].copy()
     if not df_sin_fono.empty:
-        df_sin_fono['motivo_rechazo'] = "Sin Teléfono Válido (Agotados/Inhibidos)"
+        df_sin_fono['motivo_rechazo'] = "Sin Celular Válido (Agotados/Inhibidos/Fijos)"
         lista_rechazos.append(df_sin_fono)
 
     df_rech_final = pd.concat(lista_rechazos, ignore_index=True) if lista_rechazos else pd.DataFrame(columns=df.columns)
@@ -213,7 +212,6 @@ def procesar_telefonos_jerarquia(df: pd.DataFrame, task_id: str, cols_fono_estra
 def validar_inhibicion_con_sp(df: pd.DataFrame, cliente: str, tipo_campana: str, db_session: Connection, task_id: str, cols_a_validar: List[str]) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Sube datos a Tabla Real, ejecuta SP y marca con '0'.
-    Maneja MAIL_INF como MAIL.
     """
     logger.info(f"[Task {task_id}] Ejecutando inhibición SP en columnas: {cols_a_validar}")
     
@@ -225,13 +223,11 @@ def validar_inhibicion_con_sp(df: pd.DataFrame, cliente: str, tipo_campana: str,
     staging_table_name = f"stg_inhib_{table_id}"
 
     try:
-        # 1. Preparar DataFrame
         df_upload = df.copy()
         cols_def_list = []
         
         for col in df_upload.columns:
             if df_upload[col].dtype == 'object':
-                # Limpieza preventiva: '0' -> ''
                 df_upload[col] = df_upload[col].astype(str).replace(['nan', 'None', '0'], '')
             
             col_lower = col.lower()
@@ -240,7 +236,6 @@ def validar_inhibicion_con_sp(df: pd.DataFrame, cliente: str, tipo_campana: str,
             else:
                 cols_def_list.append(f"[{col}] NVARCHAR(MAX)")
         
-        # RUT Clean (Sin DV) si es necesario
         col_rut_key = "rut" if "rut" in df_upload.columns else "idempresa"
         col_rut_sp = col_rut_key
 
@@ -249,16 +244,13 @@ def validar_inhibicion_con_sp(df: pd.DataFrame, cliente: str, tipo_campana: str,
              df_upload['rut_clean'] = df_upload['rut'].astype(str).str.split('-').str[0]
              col_rut_sp = 'rut_clean'
 
-        # 2. Crear Tabla
         cols_def = ", ".join(cols_def_list)
         db_session.execute(text(f"CREATE TABLE [B2C].[dbo].[{staging_table_name}] ({cols_def})"))
 
-        # 3. Carga Masiva
         bulk_insert_via_csv(db_session, df_upload, f"[B2C].[dbo].[{staging_table_name}]", f"inhib_{table_id}", is_temp_table=False)
         
         columnas_reales = [c for c in cols_a_validar if c in df_upload.columns]
 
-        # 4. Ejecutar SP
         for col_contacto in columnas_reales:
             logger.info(f"[Task {task_id}]   - SP Inhibiendo: {col_contacto} (Tipo: {tipo_contacto_sp})")
             
@@ -286,7 +278,6 @@ def validar_inhibicion_con_sp(df: pd.DataFrame, cliente: str, tipo_campana: str,
                 "tipo_ctto": tipo_contacto_sp
             })
 
-        # 5. Descargar
         result = db_session.execute(text(f"SELECT * FROM [B2C].[dbo].[{staging_table_name}]"))
         cols_res = result.keys()
         df_resultado = pd.DataFrame(result.fetchall(), columns=cols_res)
@@ -328,7 +319,6 @@ def validar_gestionados_hoy(df: pd.DataFrame, cliente: str, db_session_b2c: Conn
 # --- 6. SEGMENTO ---
 def _obtener_query_inhibicion(tipo_campana, cliente_codigo):
     try:
-        # Sube dos niveles: pipelines -> app -> backend
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         json_path = os.path.join(base_dir, "validaMasiv.json")
         
@@ -390,11 +380,13 @@ def validar_duplicados(df: pd.DataFrame, tipo_campana: str, cliente: str, task_i
                 df_duplicates_total = pd.concat([df_duplicates_total, dups])
                 df_clean = df_clean[~mask]
 
+    # Reglas Generales
     if cliente != "0360CQTA":
         if "rut" in df_clean.columns: aplicar_filtro("rut", "RUT Duplicado")
         if "mail" in df_clean.columns and tipo_campana in ["MAIL", "MAIL_INF"]:
              aplicar_filtro("mail", "Email Duplicado")
 
+    # Reglas Cliente 0360CQTA
     if cliente == "0360CQTA":
         id_cols = ["idempresa", "id_empresa", "id"]
         id_col = next((c for c in id_cols if c in df_clean.columns), None)
@@ -406,10 +398,15 @@ def validar_duplicados(df: pd.DataFrame, tipo_campana: str, cliente: str, task_i
             df_clean[dir_col] = df_clean[dir_col].astype(str).str.lower().str.strip()
             aplicar_filtro(dir_col, "Dirección Duplicada")
 
+    # Reglas SMS
     if tipo_campana == "SMS":
         phone_cols = [c for c in df_clean.columns if "fono" in c or "tel" in c]
         if phone_cols:
             aplicar_filtro(phone_cols[0], "Teléfono Duplicado")
+    
+    # Reglas DISCADOR
+    if tipo_campana == "DISC":
+        if "rut" in df_clean.columns: aplicar_filtro("rut", "RUT Duplicado (Discador)")
 
     if "ic" in df_clean.columns:
         aplicar_filtro("ic", "IC Duplicado")
@@ -425,7 +422,6 @@ def validar_tecnicamente(df: pd.DataFrame, tipo_campana: str, task_id: str) -> T
         # Validar columna 'telefono' (consolidada)
         col_tel = "telefono"
         if col_tel not in df_val.columns:
-             # Fallback por si acaso
              cols_tel = [c for c in df_val.columns if "fono" in c or "tel" in c]
              if cols_tel: df_val[col_tel] = df_val[cols_tel[0]]
              else: raise ValueError("Falta columna de teléfono.")

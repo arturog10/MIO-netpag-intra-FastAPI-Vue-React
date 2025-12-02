@@ -20,7 +20,7 @@
       "schema": "dbo",
       "table": "SCORING_ENTEL"
     },
-    "LIDER": {
+    "0290LIDB": {
       "db_key": "b2c_oper",
       "schema": "dbo",
       "table": "1009_RTG_0290LIDB_"

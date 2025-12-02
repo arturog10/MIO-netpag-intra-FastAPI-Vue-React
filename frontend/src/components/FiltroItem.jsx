@@ -39,7 +39,7 @@ function FiltroItem({ columnName, initialValue, onChange }) {
 
   const opcionesOperador = esFecha
     ? ["esta_entre", "es_nulo", "no_es_nulo"]
-    : ["esta_entre", "contiene", "es_igual", "distinto_de", "mayor_que", "menor_que", "in", "not_in", "es_nulo", "no_es_nulo"];
+    : ["esta_entre", "contiene", "comienza_con", "termina_con", "es_igual", "distinto_de", "mayor_que", "menor_que", "in", "not_in", "es_nulo", "no_es_nulo"];
 
   const defaultOperator = esFecha ? "esta_entre" : "contiene";
   

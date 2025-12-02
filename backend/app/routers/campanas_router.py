@@ -46,7 +46,6 @@ class ZipDownloadRequest(BaseModel):
 @router.get("/plantillas")
 async def listar_plantillas(db: B2CSession, user: str = Depends(get_current_user_email)):
     try:
-        # Verificar Admin
         es_admin = False
         try:
             row = db.execute(text("SELECT rol FROM B2C.dbo.Usuarios WHERE email = :e"), {"e": user}).fetchone()
@@ -76,12 +75,9 @@ async def crear_plantilla(req: dict, db: B2CSession, user: str = Depends(get_cur
     try:
         user_id = 0
         try:
-            # CORRECCIÓN: id -> id_usuario
             user_row = db.execute(text("SELECT id_usuario FROM B2C.dbo.Usuarios WHERE email = :email"), {"email": user}).fetchone()
             user_id = user_row[0] if user_row else 0
-        except Exception as e_user:
-            logger.warning(f"No se pudo obtener ID de usuario para {user}: {e_user}")
-            user_id = 0
+        except: pass
 
         nombre = req.get("nombre_plantilla")
         id_estrategia = req.get("id_estrategia_base")
@@ -105,7 +101,6 @@ async def editar_plantilla(id: int, req: dict, db: B2CSession, user: str = Depen
     try:
         user_id = 0
         try:
-            # CORRECCIÓN: id -> id_usuario
             user_row = db.execute(text("SELECT id_usuario FROM B2C.dbo.Usuarios WHERE email = :email"), {"email": user}).fetchone()
             user_id = user_row[0] if user_row else 0
         except: pass
@@ -127,49 +122,86 @@ async def editar_plantilla(id: int, req: dict, db: B2CSession, user: str = Depen
         logger.error(f"Error al actualizar plantilla {id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error al actualizar: {str(e)}")
 
-# --- AQUÍ ESTÁ LA CORRECCIÓN: ENDPOINT DELETE ---
 @router.delete("/plantillas/{id}")
 async def eliminar_plantilla(id: int, db: B2CSession, user: str = Depends(get_current_user_email)):
-    """Elimina lógicamente una plantilla (Solo Admins)."""
     try:
-        # Verificar Admin y obtener ID
-        # CORRECCIÓN: id -> id_usuario
         row = db.execute(text("SELECT rol, id_usuario FROM B2C.dbo.Usuarios WHERE email = :e"), {"e": user}).fetchone()
-        
         if not row or row[0] != 'admin':
             raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar plantillas.")
         
         user_id = row[1]
-
         eliminar_plantilla_db(db, id, user_id, user)
         
         try: db_users.registrar_accion_db(db, user, "eliminar_plantilla", {"id_plantilla": id})
         except: pass
 
-        logger.info(f"Plantilla {id} eliminada (lógica) por {user}")
         return {"message": "Plantilla eliminada correctamente"}
-
     except HTTPException: raise
     except Exception as e:
         logger.error(f"Error al eliminar plantilla {id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-# ... (Resto de endpoints Ejecutar, Status, Resultados, Cancel, Download, Check, Preview IGUALES) ...
-# Asegúrate de mantener el resto del archivo tal cual estaba
-@router.post("/ejecutar/{id_plantilla}")
-async def ejecutar_campana(id_plantilla: int, background_tasks: BackgroundTasks, db: B2CSession, user: str = Depends(get_current_user_email)):
+@router.patch("/plantillas/{id}/estado")
+async def cambiar_estado_plantilla(id: int, payload: dict, db: B2CSession, user: str = Depends(get_current_user_email)):
     try:
+        from app.db_plantillas_operations import cambiar_estado_plantilla_db
+        
+        row = db.execute(text("SELECT rol, id_usuario FROM B2C.dbo.Usuarios WHERE email = :e"), {"e": user}).fetchone()
+        if not row or row[0] != 'admin':
+            raise HTTPException(status_code=403, detail="Solo administradores pueden cambiar el estado.")
+        
+        user_id = row[1]
+        nuevo_estado = payload.get("estado")
+        if nuevo_estado not in [0, 1]: raise HTTPException(status_code=400, detail="Estado inválido")
+
+        cambiar_estado_plantilla_db(db, id, nuevo_estado, user_id, user)
+        
+        try: db_users.registrar_accion_db(db, user, "cambiar_estado_plantilla", {"id_plantilla": id, "nuevo_estado": nuevo_estado})
+        except: pass
+
+        return {"message": "Estado actualizado"}
+    except HTTPException: raise
+    except Exception as e:
+        logger.error(f"Error cambiando estado: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- ENDPOINTS EJECUCIÓN (CON VALIDACIÓN DE CONCURRENCIA) ---
+
+@router.post("/ejecutar/{id_plantilla}")
+async def ejecutar_campana(
+    id_plantilla: int, 
+    background_tasks: BackgroundTasks, 
+    db: B2CSession, 
+    user: str = Depends(get_current_user_email)
+):
+    try:
+        # 1. VALIDACIÓN DE CONCURRENCIA
+        # Recorremos las tareas en memoria para ver si este usuario ya tiene una corriendo
+        for t_id, t_data in tasks_db.items():
+            if t_data.get("user_email") == user and t_data.get("status") == "running":
+                logger.warning(f"Usuario {user} intentó ejecutar múltiples campañas simultáneamente.")
+                raise HTTPException(
+                    status_code=409, 
+                    detail="Ya tienes una campaña en ejecución. Por favor, espera a que termine para iniciar otra."
+                )
+
+        # 2. Inicio de Tarea
         import uuid
         task_id = str(uuid.uuid4())
-        tasks_db[task_id] = {"status": "running", "user_email": user}
+        tasks_db[task_id] = {"status": "running", "user_email": user, "step": "Iniciando..."}
+        
         try:
             p = cargar_plantilla_db(db, id_plantilla)
             n = p["nombre_plantilla"] if p else "Unknown"
             db_users.registrar_accion_db(db, user, "ejecutar_campana", {"id_plantilla": id_plantilla, "nombre": n, "task_id": task_id})
         except: pass
+        
         logger.info(f"Iniciando tarea {task_id} usuario {user}")
         background_tasks.add_task(ejecutar_pipeline_campana, id_plantilla, task_id, "b2c")
+        
         return {"task_id": task_id}
+
+    except HTTPException: raise
     except Exception as e:
         logger.error(f"Error ejecutar: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -193,7 +225,10 @@ async def cancel_task(task_id: str, db: B2CSession, user: str = Depends(get_curr
         task = tasks_db.get(task_id)
         if not task: raise HTTPException(status_code=404)
         if task.get("user_email") != user: logger.warning(f"Usuario {user} intentó cancelar tarea ajena")
+        
         task["status"] = "cancelled"
+        task["step"] = "Cancelando..." # Feedback visual inmediato
+        
         try: db_users.registrar_accion_db(db, user, "cancelar_campana", {"task_id": task_id})
         except: pass
         return {"message": "Cancelado"}
@@ -233,34 +268,30 @@ async def download_file(file_path: str, db: B2CSession, user: str = Depends(get_
 @router.get("/check-existing/{id_plantilla}")
 async def check_existing_files(id_plantilla: int, db: B2CSession):
     try:
-        plantilla = cargar_plantilla_db(db, id_plantilla)
-        if not plantilla: raise HTTPException(status_code=404)
-        estrategia = db_ops.cargar_una_estrategia_db(db, plantilla["id_estrategia_base"])
-        if not estrategia: raise HTTPException(status_code=404)
-        cliente = estrategia["codigo_cliente"]
-        
+        p = cargar_plantilla_db(db, id_plantilla)
+        if not p: raise HTTPException(status_code=404)
+        e = db_ops.cargar_una_estrategia_db(db, p["id_estrategia_base"])
+        if not e: raise HTTPException(status_code=404)
+        c = e["codigo_cliente"]
         now = datetime.now()
-        target_dir = os.path.join("campanas_generadas", cliente, now.strftime("%d%m%Y"))
-        
+        target = os.path.join("campanas_generadas", c, now.strftime("%d%m%Y"))
         files = []
-        if os.path.exists(target_dir):
-             for f in os.listdir(target_dir):
-                 if f.endswith(".csv") or f.endswith(".xlsx"):
-                     files.append(f"{cliente}/{now.strftime('%d%m%Y')}/{f}")
+        if os.path.exists(target):
+             for f in os.listdir(target):
+                 if f.endswith(".csv") or f.endswith(".xlsx"): files.append(f"{c}/{now.strftime('%d%m%Y')}/{f}")
         return {"files": files}
     except Exception as e:
-        logger.error(f"Error check files: {e}", exc_info=True)
+        logger.error(f"Error check: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/preview")
 async def get_file_preview(file_path: str, user: str = Depends(get_current_user_email)):
     base_dir = "campanas_generadas"
     if ".." in file_path: raise HTTPException(status_code=400)
-    full_path = os.path.join(base_dir, file_path)
-    if not os.path.exists(full_path): raise HTTPException(status_code=404)
-
+    full = os.path.join(base_dir, file_path)
+    if not os.path.exists(full): raise HTTPException(status_code=404)
     try:
-        df = pd.read_csv(full_path, sep=';', encoding='utf-8-sig', nrows=10)
+        df = pd.read_csv(full, sep=';', encoding='utf-8-sig', nrows=10)
         df = df.replace({np.nan: None})
         return df.to_dict(orient="records")
     except Exception as e:
