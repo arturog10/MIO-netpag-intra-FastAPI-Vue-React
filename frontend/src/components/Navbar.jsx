@@ -49,11 +49,9 @@ function Navbar() {
             Lista Negra
           </NavLink>
 
-          {user.rol === 'admin' && (
-            <NavLink to="/campanas" className={({isActive}) => isActive ? activeClass : inactiveClass}>
-              Campañas
-            </NavLink>  
-          )}
+          <NavLink to="/campanas" className={({isActive}) => isActive ? activeClass : inactiveClass}>
+            Campañas
+          </NavLink>
             
           <NavLink to="/reportes" className={({isActive}) => isActive ? activeClass : inactiveClass}>
             Reportes
