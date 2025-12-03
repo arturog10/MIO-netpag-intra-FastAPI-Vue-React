@@ -13,18 +13,18 @@
     WHERE 
         ISNULL(ULTIMA_GESTION, '') NOT LIKE '%BLOQUEO%'
         AND ISNULL(NOMBRE, '') <> 'SIN NOMBRE' -- Validar que el nombre no sea "SIN NOMBRE"
-        AND RUT IN (
-            SELECT 
-                A1.RUT
-            FROM 
-                B2C_OPER.DBO.[XXXX_CUENTAS_0200ENTE] A1 WITH (NOLOCK)
-            INNER JOIN 
-                B2C_OPER.DBO.[XXXX_SALDOS_0200ENTE] A2 WITH (NOLOCK)
-            ON 
-                A1.FOLIO = A2.[FOLIO DOC]
-            GROUP BY 
-                A1.RUT
-        ) -- ESTO VALIDA LA VIGENCIA DEL RUT
+        -- AND RUT IN (
+        --     SELECT 
+        --         A1.RUT
+        --     FROM 
+        --         B2C_OPER.DBO.[XXXX_CUENTAS_0200ENTE] A1 WITH (NOLOCK)
+        --     INNER JOIN 
+        --         B2C_OPER.DBO.[XXXX_SALDOS_0200ENTE] A2 WITH (NOLOCK)
+        --     ON 
+        --         A1.FOLIO = A2.[FOLIO DOC]
+        --     GROUP BY 
+        --         A1.RUT
+        -- ) -- ESTO VALIDA LA VIGENCIA DEL RUT
         -- 2. Nueva validación estricta: 
         -- Se suman todos los días de la semana. Si la suma es distinta de 0, el RUT se descarta.
         AND (

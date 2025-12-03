@@ -146,6 +146,23 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
             
             df_validado = df_completo.copy()
 
+            # --- NUEVO: Lógica Especial 0200ENTE (Limpiar RUT) ---
+            if cliente_codigo == "0200ENTE" and "rut" in df_validado.columns:
+                logger.info(f"[Task {task_id}] Aplicando limpieza especial de RUT para 0200ENTE (quitar 0s y DV)...")
+                
+                # 1. Guardar RUT original
+                df_validado["_rut_orig"] = df_validado["rut"]
+                
+                # 2. Función de limpieza: 0000783498 -> 78349
+                def limpiar_rut_ente(val):
+                    s = str(val).strip().lstrip("0")
+                    # Eliminar último caracter (DV) si queda algo
+                    return s[:-1] if len(s) > 0 else s
+                
+                # 3. Aplicar al RUT principal (para que las validaciones usen este)
+                df_validado["rut"] = df_validado["rut"].apply(limpiar_rut_ente)
+            # ------------------------------------------------------
+
             # --- FASE A: FILTROS DE RUT ---
             actualizar_paso(task_id, "Validando gestionados hoy y segmento...")
             
@@ -211,9 +228,9 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
                 )
                 if not df_rech_tec.empty:
                     df_rechazados_total = pd.concat([df_rechazados_total, df_rech_tec])
-            
+
             elif tipo_campana == "DISC":
-                # Discador solo valida RUTs (ya hecho en Fase A)
+                # Discador solo valida RUTs (ya hecho en Fase A y C)
                 pass
 
             # --- FASE C: DUPLICADOS FINALES ---
@@ -242,6 +259,11 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
         if not os.path.exists(output_dir): os.makedirs(output_dir, exist_ok=True)
         
         if not df_rechazados_total.empty:
+            # --- RESTAURAR RUT ORIGINAL EN RECHAZADOS (0200ENTE) ---
+            if "_rut_orig" in df_rechazados_total.columns:
+                df_rechazados_total["rut"] = df_rechazados_total["_rut_orig"]
+            # -------------------------------------------------------
+
             n_rech = f"{prefijo_archivo}_RECHAZADOS.csv"
             path_rech = os.path.join(output_dir, n_rech)
             
@@ -274,7 +296,6 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
                 if 'mail' not in df_db.columns: df_db['mail'] = ''
                 if 'motivo_rechazo' not in df_db.columns: df_db['motivo_rechazo'] = 'Desconocido'
 
-                # Sin columna ID
                 cols_db_ordenadas = ['fecha_proceso', 'cliente', 'rut', 'telefono', 'mail', 'motivo_rechazo', 'archivo_origen', 'task_id']
                 df_db_final = df_db[cols_db_ordenadas].fillna('')
                 
@@ -292,6 +313,12 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
         # --- PASO 8: DIVISIÓN Y CÁLCULO ---
         actualizar_paso(task_id, "Aplicando cálculos y generando archivos finales...")
         
+        # --- RESTAURAR RUT ORIGINAL EN VÁLIDOS (0200ENTE) ---
+        if "_rut_orig" in df_validado.columns:
+             df_validado["rut"] = df_validado["_rut_orig"]
+             # Nota: No borramos _rut_orig por si acaso, pero "rut" ya tiene el valor original
+        # ----------------------------------------------------
+
         cols_div = [c.lower() for c in (reglas_proc_json.get("columnas_division") or [])]
         if isinstance(cols_div, str): cols_div = [cols_div]
         cols_validas_div = [c for c in cols_div if c in df_validado.columns]
@@ -301,7 +328,7 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
             nombre_final = f"{prefijo_archivo}_{sufijo_nombre}.csv"
             ruta = os.path.join(output_dir, nombre_final)
             
-            # 1. Lógica Proveedor
+            # Lógica Proveedor
             df_final = proveedores_logic.aplicar_logica_proveedor(
                 df_g.copy(), 
                 proveedor_seleccionado, 
@@ -311,7 +338,6 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
 
             cols_exportar = []
             if proveedor_seleccionado:
-                # Usar estrictamente lo que devuelve el proveedor
                 cols_exportar = df_final.columns.tolist()
             else:
                 if lista_cols_finales:
@@ -358,9 +384,11 @@ def ejecutar_pipeline_campana(id_plantilla: int, task_id: str, db_key_b2c: str):
                     col, op, val = c.get("columna", "").lower().strip(), c.get("operador", ""), c.get("valor", "")
                     m = None
                     try:
-                        # --- NUEVOS OPERADORES PANDAS ---
-                        if op == "comienza_con": m = restante[col].astype(str).str.lower().str.startswith(str(val).lower(), na=False)
-                        elif op == "termina_con": m = restante[col].astype(str).str.lower().str.endswith(str(val).lower(), na=False)
+                        # --- NUEVOS OPERADORES ---
+                        if op == "comienza_con":
+                            m = restante[col].astype(str).str.lower().str.startswith(str(val).lower(), na=False)
+                        elif op == "termina_con":
+                            m = restante[col].astype(str).str.lower().str.endswith(str(val).lower(), na=False)
                         elif op=="==": m = restante[col].astype(str) == str(val)
                         elif op=="!=": m = restante[col].astype(str) != str(val)
                         elif op==">": m = pd.to_numeric(restante[col], errors='coerce') > float(val)

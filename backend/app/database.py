@@ -69,7 +69,8 @@ def initialize_engines():
                     pool_pre_ping=True,   # <--- Verifica conexión antes de usarla (Evita error 10054)
                     pool_recycle=1800,    # Recicla conexiones cada 30 min para evitar timeouts del servidor
                     pool_size=10,         # Tamaño del pool
-                    max_overflow=20       # Conexiones extra si el pool se llena
+                    max_overflow=20,       # Conexiones extra si el pool se llena
+                    fast_executemany=True
                 ),
                 "default_schema": "dbo" 
             }
@@ -98,9 +99,12 @@ def get_db_session(db_key: str):
     transaction = None
     
     try:
-        connection = engine.connect()
+        connection = engine.connect().execution_options(
+            timeout=600,                # Command Timeout: 10 minutos para CONSULTAS
+            isolation_level="READ UNCOMMITTED" # Equivalente a NOLOCK global (más velocidad)
+        )
         transaction = connection.begin()
-        logger.debug(f"Sesión de DB iniciada para '{db_key}' (Endpoint)")
+        logger.debug(f"Sesión de DB '{db_key}' iniciada (Timeout: 600s)")
         yield connection
         if transaction and transaction.is_active:
             transaction.commit()
@@ -129,11 +133,14 @@ def get_db_session_context(db_key: str):
          raise Exception(f"Clave de DB no configurada: {db_key}")
     
     engine = engines[db_key]["engine"]
-    connection = engine.connect()
+    connection = engine.connect().execution_options(
+        timeout=600, 
+        isolation_level="READ UNCOMMITTED"
+    )
     transaction = connection.begin()
     
     try:
-        logger.debug(f"Sesión de DB iniciada para '{db_key}' (Context)")
+        logger.debug(f"Contexto DB '{db_key}' iniciado (Timeout: 600s)")
         yield connection
         if transaction.is_active:
             transaction.commit()

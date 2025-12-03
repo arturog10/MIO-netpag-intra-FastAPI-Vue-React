@@ -11,7 +11,7 @@ FROM
     B2C_OPER.DBO.[1009_RTG_0200ENTE_] WITH (NOLOCK)
 WHERE 
     ISNULL(ULTIMA_GESTION, '') NOT LIKE '%BLOQUEO%'
-    -- AND ISNULL(NOMBRE, '') <> 'SIN NOMBRE' -- Validar que el nombre no sea "SIN NOMBRE"
+    AND ISNULL(NOMBRE, '') <> 'SIN NOMBRE' -- Validar que el nombre no sea "SIN NOMBRE"
 	-- 	Esta consulta hay que comentarla a inicio de mes hasta que llegue un nuevo archivo de saldos
     -- AND RUT IN (
     --     SELECT 
