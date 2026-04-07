@@ -48,8 +48,8 @@ def bulk_insert_final(df_validos: pd.DataFrame, cliente: str, tipo: str, task_id
         df_carga.fillna("", inplace=True)
 
         # 2. Conectar y Cargar
-        with get_db_session_context("b2c") as db_session:
-            count = bulk_insert_via_csv(db_session, df_carga, "B2C.dbo.masiv_dia", task_id, is_temp_table=False)
+        with get_db_session_context("intranet") as db_session:
+            count = bulk_insert_via_csv(db_session, df_carga, "intranet.dbo.masiv_dia", task_id, is_temp_table=False)
             logger.info(f"[Task {task_id}] Carga final completada: {count} registros.")
             return count
 

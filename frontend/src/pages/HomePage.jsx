@@ -7,9 +7,9 @@ function HomePage() {
     // Centra el contenido verticalmente (menos la altura aprox. del navbar)
     <div className="flex items-center justify-center min-h-[calc(100vh-80px)] p-4">
       <div className="flex flex-col items-center text-center space-y-4">
-        
+
         <h1 className="text-5xl md:text-6xl font-bold bg-gradient-to-r from-indigo-600 to-green-500 bg-clip-text text-transparent pb-2">
-          Bienvenidos a NETPAG-INTRA
+          Bienvenidos a INTRANET
         </h1>
 
         <p className="text-xl md:text-2xl text-gray-600">

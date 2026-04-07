@@ -23,7 +23,7 @@ router = APIRouter(
 
 # --- Dependencia de BD (igual que en auth_router.py) ---
 def get_user_db():
-    yield from get_db_session("b2c")
+    yield from get_db_session("intranet")
 
 DBSession = Annotated[Connection, Depends(get_user_db)]
 

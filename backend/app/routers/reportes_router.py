@@ -15,9 +15,9 @@ router = APIRouter(
     dependencies=[Depends(get_current_user_email)]
 )
 
-# Dependencia de DB (Usamos 'b2c' según tu configuración)
+# Dependencia de DB (Usamos 'intranet' según tu configuración)
 def get_db():
-    yield from get_db_session("b2c")
+    yield from get_db_session("intranet")
 
 DBSession = Annotated[Connection, Depends(get_db)]
 

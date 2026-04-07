@@ -33,7 +33,7 @@ router = APIRouter(
 )
 
 def get_b2c_db():
-    yield from get_db_session("b2c")
+    yield from get_db_session("intranet")
 
 B2CSession = Annotated[Connection, Depends(get_b2c_db)]
 
@@ -48,7 +48,7 @@ async def listar_plantillas(db: B2CSession, user: str = Depends(get_current_user
     try:
         es_admin = False
         try:
-            row = db.execute(text("SELECT rol FROM B2C.dbo.Usuarios WHERE email = :e"), {"e": user}).fetchone()
+            row = db.execute(text("SELECT rol FROM intranet.dbo.Usuarios WHERE email = :e"), {"e": user}).fetchone()
             if row and row[0] == 'admin': es_admin = True
         except: pass
         
@@ -75,7 +75,7 @@ async def crear_plantilla(req: dict, db: B2CSession, user: str = Depends(get_cur
     try:
         user_id = 0
         try:
-            user_row = db.execute(text("SELECT id_usuario FROM B2C.dbo.Usuarios WHERE email = :email"), {"email": user}).fetchone()
+            user_row = db.execute(text("SELECT id_usuario FROM intranet.dbo.Usuarios WHERE email = :email"), {"email": user}).fetchone()
             user_id = user_row[0] if user_row else 0
         except: pass
 
@@ -101,7 +101,7 @@ async def editar_plantilla(id: int, req: dict, db: B2CSession, user: str = Depen
     try:
         user_id = 0
         try:
-            user_row = db.execute(text("SELECT id_usuario FROM B2C.dbo.Usuarios WHERE email = :email"), {"email": user}).fetchone()
+            user_row = db.execute(text("SELECT id_usuario FROM intranet.dbo.Usuarios WHERE email = :email"), {"email": user}).fetchone()
             user_id = user_row[0] if user_row else 0
         except: pass
 
@@ -125,7 +125,7 @@ async def editar_plantilla(id: int, req: dict, db: B2CSession, user: str = Depen
 @router.delete("/plantillas/{id}")
 async def eliminar_plantilla(id: int, db: B2CSession, user: str = Depends(get_current_user_email)):
     try:
-        row = db.execute(text("SELECT rol, id_usuario FROM B2C.dbo.Usuarios WHERE email = :e"), {"e": user}).fetchone()
+        row = db.execute(text("SELECT rol, id_usuario FROM intranet.dbo.Usuarios WHERE email = :e"), {"e": user}).fetchone()
         if not row or row[0] != 'admin':
             raise HTTPException(status_code=403, detail="Solo administradores pueden eliminar plantillas.")
         
@@ -146,7 +146,7 @@ async def cambiar_estado_plantilla(id: int, payload: dict, db: B2CSession, user:
     try:
         from app.db_plantillas_operations import cambiar_estado_plantilla_db
         
-        row = db.execute(text("SELECT rol, id_usuario FROM B2C.dbo.Usuarios WHERE email = :e"), {"e": user}).fetchone()
+        row = db.execute(text("SELECT rol, id_usuario FROM intranet.dbo.Usuarios WHERE email = :e"), {"e": user}).fetchone()
         if not row or row[0] != 'admin':
             raise HTTPException(status_code=403, detail="Solo administradores pueden cambiar el estado.")
         
@@ -197,7 +197,7 @@ async def ejecutar_campana(
         except: pass
         
         logger.info(f"Iniciando tarea {task_id} usuario {user}")
-        background_tasks.add_task(ejecutar_pipeline_campana, id_plantilla, task_id, "b2c")
+        background_tasks.add_task(ejecutar_pipeline_campana, id_plantilla, task_id, "intranet")
         
         return {"task_id": task_id}
 

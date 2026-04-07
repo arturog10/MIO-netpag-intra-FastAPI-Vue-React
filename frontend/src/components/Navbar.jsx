@@ -14,7 +14,7 @@ function Navbar() {
   // 'user' es el objeto ({email, rol}) o null
   const { user, logout, isAuthenticated } = useAuth();
   const navigate = useNavigate(); // Hook para redirigir
-  
+
   // Clase para NavLink activo
   const activeClass = "text-blue-600 font-semibold";
   const inactiveClass = "text-gray-600 hover:text-blue-600";
@@ -27,35 +27,35 @@ function Navbar() {
 
   return (
     <nav className="flex w-full flex-col md:flex-row items-center justify-between gap-4 px-6 py-4 shadow-md bg-white">
-      
+
       {/* Lado Izquierdo: Título y Links */}
       <div className="flex w-full md:w-auto items-center justify-between">
         <Link to="/" className="text-xl font-bold text-gray-800">
-          NETPAG-INTRA
+          INTRANET
         </Link>
       </div>
-      
+
       {/* --- CAMBIO: Oculta los links si no está autenticado --- */}
       {/* Esto evita mostrar links a rutas protegidas */}
       {isAuthenticated && (
         <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6">
-          <NavLink to="/visor_page" className={({isActive}) => isActive ? activeClass : inactiveClass}>
+          <NavLink to="/visor_page" className={({ isActive }) => isActive ? activeClass : inactiveClass}>
             Estrategias
           </NavLink>
-          <NavLink to="/trazabilidad_page" className={({isActive}) => isActive ? activeClass : inactiveClass}>
+          {/* <NavLink to="/trazabilidad_page" className={({ isActive }) => isActive ? activeClass : inactiveClass}>
             Trazabilidad
           </NavLink>
-          <NavLink to="/ListaNegra_Page" className={({isActive}) => isActive ? activeClass : inactiveClass}>
+          <NavLink to="/ListaNegra_Page" className={({ isActive }) => isActive ? activeClass : inactiveClass}>
             Lista Negra
           </NavLink>
 
-          <NavLink to="/campanas" className={({isActive}) => isActive ? activeClass : inactiveClass}>
+          <NavLink to="/campanas" className={({ isActive }) => isActive ? activeClass : inactiveClass}>
             Campañas
-          </NavLink>
-            
-          <NavLink to="/reportes" className={({isActive}) => isActive ? activeClass : inactiveClass}>
+          </NavLink> */}
+
+          <NavLink to="/reportes" className={({ isActive }) => isActive ? activeClass : inactiveClass}>
             Reportes
-          </NavLink>    
+          </NavLink>
           {/* --- CAMBIO: Verificación segura del rol --- */}
           {/* 'user' aquí nunca será 'null' gracias al 'isAuthenticated' de arriba */}
           {user.rol === 'admin' && (
@@ -75,8 +75,8 @@ function Navbar() {
               {/* --- CAMBIO: El token solo tiene 'email', no 'nombre_completo' --- */}
               Usuario: {user.email}
             </span>
-            <Button 
-              label="Cerrar Sesión" 
+            <Button
+              label="Cerrar Sesión"
               onClick={handleLogout} // Usa el nuevo handler
               className={btnOutline}
               size="small"
@@ -84,8 +84,8 @@ function Navbar() {
           </>
         ) : (
           // --- CAMBIO: El botón "Iniciar Sesión" ahora funciona ---
-          <Button 
-            label="Iniciar Sesión" 
+          <Button
+            label="Iniciar Sesión"
             size="small"
             onClick={() => navigate('/login')} // Añade el onClick
             className={btnOutline} // Le da el mismo estilo

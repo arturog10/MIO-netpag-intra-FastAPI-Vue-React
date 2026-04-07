@@ -31,9 +31,9 @@ def _get_table_info(config_key: str, client_code: str = None) -> dict:
         info = mapping.get(client_code)
         
         if not info:
-             # Fallback exclusivo para clientes dinámicos (b2c_oper)
+             # Fallback exclusivo para clientes dinámicos (intranet)
              if config_key == "cliente_table_map":
-                return {"db_key": "b2c_oper", "schema": "dbo", "table": client_code}
+                return {"db_key": "intranet", "schema": "dbo", "table": client_code}
              
              # Si es otra cosa (ej: lista negra) y no existe, error
              raise ValueError(f"No se encontró configuración para {config_key} -> {client_code}")

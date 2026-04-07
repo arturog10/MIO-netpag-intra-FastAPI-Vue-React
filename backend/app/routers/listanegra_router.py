@@ -27,7 +27,7 @@ router = APIRouter(
 )
 
 def get_b2c_db():
-    yield from get_db_session("b2c") 
+    yield from get_db_session("intranet") 
 
 B2CDBSession = Annotated[Connection, Depends(get_b2c_db)]
 CurrentUserEmail = Annotated[str, Depends(get_current_user_email)] 
@@ -147,7 +147,7 @@ async def export_listanegra_data(
 def get_consultas_for_lista(listanegra_key: str, db: B2CDBSession):
     """Obtiene la lista de consultas guardadas."""
     try:
-        # Usamos la misma DB de b2c donde están las estrategias
+        # Usamos la misma DB de intranet donde están las estrategias
         consultas = db_ops.cargar_estrategias_db(db, listanegra_key)
         return [{"id": c["id"], "nombre": c["nombre_estrategia"]} for c in consultas]
     except Exception as e:
@@ -185,7 +185,7 @@ def save_consulta(
         # 1. Obtener ID Usuario
         id_usuario = None
         try:
-            row = db.execute(text("SELECT id_usuario FROM B2C.dbo.Usuarios WHERE email = :e"), {"e": current_user_email}).fetchone()
+            row = db.execute(text("SELECT id_usuario FROM intranet.dbo.Usuarios WHERE email = :e"), {"e": current_user_email}).fetchone()
             if row: id_usuario = row[0]
         except: pass
 
@@ -228,7 +228,7 @@ def overwrite_consulta(
         # 1. Obtener ID Usuario
         id_usuario = None
         try:
-            row = db.execute(text("SELECT id_usuario FROM B2C.dbo.Usuarios WHERE email = :e"), {"e": current_user_email}).fetchone()
+            row = db.execute(text("SELECT id_usuario FROM intranet.dbo.Usuarios WHERE email = :e"), {"e": current_user_email}).fetchone()
             if row: id_usuario = row[0]
         except: pass
 

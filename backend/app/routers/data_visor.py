@@ -30,7 +30,7 @@ router = APIRouter(
 
 # --- Dependencias ---
 def get_b2c_db():
-    yield from get_db_session("b2c")
+    yield from get_db_session("intranet")
 
 B2CSession = Annotated[Connection, Depends(get_b2c_db)]
 CurrentUser = Annotated[str, Depends(get_current_user_email)]
@@ -124,7 +124,7 @@ def save_strategy(
         # 2. Obtener ID de usuario (CORRECCIÓN IMPORTANTE)
         id_usuario = None
         try:
-            row = db.execute(text("SELECT id_usuario FROM B2C.dbo.Usuarios WHERE email = :e"), {"e": user}).fetchone()
+            row = db.execute(text("SELECT id_usuario FROM intranet.dbo.Usuarios WHERE email = :e"), {"e": user}).fetchone()
             if row: id_usuario = row[0]
         except Exception as e:
             logger.warning(f"No se pudo obtener ID usuario: {e}")

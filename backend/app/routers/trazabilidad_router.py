@@ -29,7 +29,7 @@ tasks_db: Dict[str, Dict[str, Any]] = {}
 
 # --- Dependencias de Auditoría ---
 def get_audit_db():
-    yield from get_db_session("b2c") 
+    yield from get_db_session("intranet") 
 
 AuditDBSession = Annotated[Connection, Depends(get_audit_db)]
 CurrentUserEmail = Annotated[str, Depends(get_current_user_email)]

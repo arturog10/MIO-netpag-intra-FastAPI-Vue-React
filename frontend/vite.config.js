@@ -9,8 +9,8 @@ export default defineConfig({
       // Redirige cualquier petición que comience con /api
       '/api': {
         // A tu servidor backend local (FastAPI/Uvicorn)
-        target: 'http://127.0.0.1:8001',
-        
+        target: 'http://127.0.0.1:8000',
+
         // Esto es importante para evitar errores de CORS en desarrollo
         changeOrigin: true,
       }

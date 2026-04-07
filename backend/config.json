@@ -1,72 +1,50 @@
 {
   "cliente_table_map": {
-    "0020ACSA": {
-      "db_key": "b2c_oper",
+    "Lista Negra": {
+      "db_key": "intranet",
       "schema": "dbo",
-      "table": "1009_RTG_0020ACSA_"
-    },
-    "0200ENTE": {
-      "db_key": "b2c_oper",
-      "schema": "dbo",
-      "table": "1009_RTG_0200ENTE_"
-    },
-    "0090AAVN": {
-      "db_key": "b2c_oper",
-      "schema": "dbo",
-      "table": "1009_RTG_0090AAVN_"
-    },
-    "SCORING_0200ENTE": {
-      "db_key": "NEOTEL_ENTEL",
-      "schema": "dbo",
-      "table": "SCORING_ENTEL"
-    },
-    "0290LIDB": {
-      "db_key": "b2c_oper",
-      "schema": "dbo",
-      "table": "1009_RTG_0290LIDB_"
+      "table": "lista_negra_interna"
     }
   },
   "tabla_estrategias": {
-    "db_key": "b2c",
+    "db_key": "intranet",
     "schema": "dbo",
     "table": "Estrategias"
   },
-
   "tabla_plantillas_campanas": {
-    "db_key": "b2c",
+    "db_key": "intranet",
     "schema": "dbo",
     "table": "PlantillasCampanas"
   },
-
   "listanegra_table_map": {
     "Lista Principal": {
-      "db_key": "b2c",
+      "db_key": "intranet",
       "schema": "dbo",
       "table": "lista_negra"
     },
     "Lista Secundaria": {
-      "db_key": "b2c",
+      "db_key": "intranet",
       "schema": "dbo",
       "table": "tbl_listas"
     }
   },
   "tabla_usuarios": {
-    "db_key": "b2c",
+    "db_key": "intranet",
     "schema": "dbo",
     "table": "Usuarios"
   },
   "tabla_auditoria": {
-    "db_key": "b2c",
+    "db_key": "intranet",
     "schema": "dbo",
     "table": "AuditoriaUsuarios"
   },
   "traf_masi": {
-    "db_key": "b2c",
+    "db_key": "intranet",
     "schema": "dbo",
     "table": "vw_TrafMasividades"
   },
   "traf_disc": {
-    "db_key": "b2c",
+    "db_key": "intranet",
     "schema": "dbo",
     "table": "vw_TrafDiscador"
   }
